@@ -192,13 +192,13 @@ case "${1:-help}" in
     width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
   }
-  .panel h2 { font-size: 18px; margin-bottom: 15px; color: #00d4ff; }
+  .panel h2 { font-size: 18px; margin-bottom: 15px; color:#00d4ff; }
   .coords {
     background: rgba(0,212,255,0.1); border-radius: 10px; padding: 12px;
     margin-bottom: 15px; font-family: monospace; font-size: 14px;
     min-height: 50px; border: 1px solid rgba(0,212,255,0.3);
   }
-  .coords span { color: #00d4ff; font-weight: bold; }
+  .coords span { color:#00d4ff; font-weight: bold; }
   .btn {
     width: 100%; padding: 12px; border: none; border-radius: 10px;
     font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px;
@@ -215,13 +215,13 @@ case "${1:-help}" in
     background: rgba(255,255,255,0.05); color: #ccc; font-size: 12px;
     cursor: pointer; transition: all 0.2s;
   }
-  .quick-btn:hover { background: rgba(0,212,255,0.2); color: #00d4ff; border-color: #00d4ff; }
+  .quick-btn:hover { background: rgba(0,212,255,0.2); color:#00d4ff; border-color:#00d4ff; }
   .search-box {
     width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
     background: rgba(255,255,255,0.1); color: #eee; font-size: 14px; margin-bottom: 10px;
     outline: none;
   }
-  .search-box:focus { border-color: #00d4ff; }
+  .search-box:focus { border-color:#00d4ff; }
   .search-box::placeholder { color: rgba(255,255,255,0.4); }
   .toast {
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -241,7 +241,7 @@ case "${1:-help}" in
     <label style="font-size:12px;color:#ccc">AMap REST API Key：</label>
     <input id="amapKeyInput" placeholder="在此输入并保存 AMap Key" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);margin-top:6px;background:rgba(255,255,255,0.05);color:#fff" />
     <div style="display:flex;gap:8px;margin-top:8px"><button id="saveKeyBtn" class="btn btn-primary">保存 Key</button><button id="clearKeyBtn" class="btn btn-secondary" style="display:none">清除 Key</button></div>
-    <div style="margin-top:8px;font-size:12px;color:#bbb">还没有 Key？参阅 README 获取并配置 AMap Key。 <a id="openReadme" href="#" style="color:#00d4ff">打开 README</a></div>
+    <div style="margin-top:8px;font-size:12px;color:#bbb">还没有 Key？参阅 README 获取并配置 AMap Key。 <a id="openReadme" href="https://github.com/sixzjd/fakeGPS-for-iPhone/blob/main/README.md" target="_blank" rel="noopener" style="color:#00d4ff; text-decoration:underline;">打开 README</a></div>
   </div>
   <div class="quick-places">
     <span class="quick-btn" onclick="goTo(39.90776,116.39565,'天安门')">天安门</span>
@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   saveBtn.addEventListener('click', function(){ var v = inpt.value.trim(); if(v){ localStorage.setItem('AMAP_KEY', v); if(hint) hint.style.display='none'; inpt.style.display='none'; saveBtn.style.display='none'; clearBtn.style.display=''; showToast('已保存 AMap Key'); } else { showToast('请输入有效的 Key'); } });
   clearBtn.addEventListener('click', function(){ localStorage.removeItem('AMAP_KEY'); inpt.value=''; inpt.style.display=''; saveBtn.style.display=''; clearBtn.style.display='none'; if(hint) hint.style.display=''; showToast('已清除 AMap Key'); });
-  openReadme.addEventListener('click', function(e){ e.preventDefault(); try{ showToast('请查看项目 README.md'); }catch(err){ showToast('无法打开 README，请在桌面查看 release/README.md'); } });
+  openReadme.addEventListener('click', function(e){ e.preventDefault(); try{ window.open(openReadme.href,'_blank'); }catch(err){ showToast('无法打开 README，请在桌面查看 release/README.md'); } });
 });
 
 function gcj02ToWgs84(lat, lng) {
