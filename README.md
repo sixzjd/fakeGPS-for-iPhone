@@ -21,7 +21,15 @@
 
 ## 安装
 
-### pip（推荐）
+### npm（推荐）
+
+```bash
+npm install -g fakegps
+```
+
+安装后直接在终端运行 `fakegps`。
+
+### pip
 
 ```bash
 # 仅命令行模式
@@ -31,7 +39,7 @@ pip install fakegps
 pip install fakegps[gui]
 ```
 
-### 手动安装
+### GitHub
 
 ```bash
 git clone https://github.com/sixzjd/fakeGPS-for-iPhone.git
