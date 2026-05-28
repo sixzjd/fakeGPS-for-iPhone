@@ -27,6 +27,18 @@ check_tunneld() {
 
 PM="python3 -m pymobiledevice3"
 
+# Helper: run pymobiledevice3 command and capture errors with helpful message
+run_pm() {
+    "${PM}" "$@"
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "❌ pymobiledevice3 命令失败: ${PM} $* (exit $rc)" >&2
+        echo "请确保 tunneld 正在运行并且设备已连接（参考 README 中的 tunneld 指南）。" >&2
+        return $rc
+    fi
+    return 0
+}
+
 # Ensure Ctrl-C (SIGINT) restores real location on device without exiting interactive shell
 if [ -z "$FAKEGPS_TRAP_INSTALLED" ]; then
     export FAKEGPS_TRAP_INSTALLED=1
@@ -70,16 +82,15 @@ except:
 
 get_coords() {
     case "$1" in
-        tiananmen)  echo "39.90776 116.39565 天安门" ;;
+        tiananmen)  echo "39.90779 116.39122 天安门" ;;
         guomao)     echo "39.90727 116.45877 国贸CBD" ;;
         wangjing)   echo "39.99271 116.47673 望京SOHO" ;;
-        shanghai)   echo "31.22840 121.47370 上海外滩" ;;
-        shenzhen)   echo "22.54600 114.05790 深圳" ;;
+        shanghai)   echo "31.24050 121.48621 上海外滩" ;;
+        shenzhen)   echo "22.54600 114.05790 深圳市民中心" ;;
         paris)      echo "48.8584 2.2945 巴黎埃菲尔铁塔" ;;
         newyork)    echo "40.7580 -73.9855 纽约时代广场" ;;
         tokyo)      echo "35.6586 139.7454 东京塔" ;;
         london)     echo "51.5074 -0.1278 伦敦大本钟" ;;
-        shenzhen)   echo "22.54600 114.05790 深圳市民中心" ;;
         *)
             eval "val=\$CUSTOM_$1"
             [ -n "$val" ] && echo "$val"
@@ -150,10 +161,10 @@ show_help() {
     echo "   sudo python3 -m pymobiledevice3 remote tunneld"
     echo ""
     echo "内置地点:"
-    echo "  tiananmen  天安门          (39.90776, 116.39565)"
+    echo "  tiananmen  天安门          (39.90779, 116.39122)"
     echo "  guomao     国贸CBD         (39.90727, 116.45877)"
     echo "  wangjing   望京SOHO        (39.99271, 116.47673)"
-    echo "  shanghai   上海外滩        (31.22840, 121.47370)"
+    echo "  shanghai   上海外滩        (31.24050, 121.48621)"
     echo "  shenzhen   深圳            (22.54600, 114.05790)"
     echo ""
     echo "  paris      巴黎埃菲尔铁塔  (48.8584, 2.2945)"
@@ -254,7 +265,7 @@ case "${1:-help}" in
     <div style="margin-top:8px;font-size:12px;color:#bbb">还没有 Key？参阅 README 获取并配置 AMap Key。 <a id="openReadme" href="https://github.com/sixzjd/fakeGPS-for-iPhone/blob/main/README.md" target="_blank" rel="noopener" style="color:#00d4ff; text-decoration:underline;">打开 README</a></div>
   </div>
   <div class="quick-places">
-    <span class="quick-btn" onclick="goTo(39.90776,116.39565,'天安门')">天安门</span>
+    <span class="quick-btn" onclick="goTo(39.90779,116.39122,'天安门')">天安门</span>
     <span class="quick-btn" onclick="goTo(39.9086,116.4605,'国贸')">国贸</span>
     <span class="quick-btn" onclick="goTo(39.9940,116.4784,'望京')">望京</span>
     <span class="quick-btn" onclick="goTo(31.2304,121.4737,'上海')">上海</span>

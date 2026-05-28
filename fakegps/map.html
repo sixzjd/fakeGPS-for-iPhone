@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FakeGPS Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="qrc:///qtwebchannel/qwebchannel.js" style="display:none">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; background: #1a1a2e; color: #eee; }
+  #map { width: 100%; height: 100vh; }
+  .panel {
+    position: fixed; top: 15px; right: 15px; z-index: 1000;
+    background: rgba(26,26,46,0.95); border-radius: 14px; padding: 18px;
+    width: 300px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+    max-height: calc(100vh - 30px); overflow-y: auto;
+  }
+  .panel h2 { font-size: 16px; margin-bottom: 12px; color: #00d4ff; }
+  .coords {
+    background: rgba(0,212,255,0.1); border-radius: 10px; padding: 10px;
+    margin-bottom: 12px; font-family: monospace; font-size: 13px;
+    min-height: 44px; border: 1px solid rgba(0,212,255,0.3);
+  }
+  .coords span { color: #00d4ff; font-weight: bold; }
+  .btn {
+    width: 100%; padding: 10px; border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: #00d4ff; color: #1a1a2e; }
+  .btn-primary:hover { background: #00b8db; }
+  .btn-danger { background: #ff4757; color: #fff; }
+  .btn-danger:hover { background: #e83a4a; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .quick-places { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+  .quick-btn {
+    padding: 5px 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05); color: #ccc; font-size: 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .quick-btn:hover { background: rgba(0,212,255,0.2); color: #00d4ff; border-color: #00d4ff; }
+  .search-box {
+    width: 100%; padding: 9px 11px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1); color: #eee; font-size: 13px;
+    margin-bottom: 8px; outline: none;
+  }
+  .search-box:focus { border-color: #00d4ff; }
+  .search-box::placeholder { color: rgba(255,255,255,0.4); }
+  .status {
+    background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;
+    margin-bottom: 10px; font-size: 12px; color: #aaa;
+  }
+  .status .label { color: #888; }
+  .status .value { color: #00d4ff; font-weight: 600; }
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: #00c853; color: #fff; padding: 10px 20px; border-radius: 10px;
+    font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.3s;
+    z-index: 2000; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #ff4757; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h2>FakeGPS</h2>
+  <div class="status" id="deviceStatus">
+    <span class="label">Device:</span> <span class="value" id="deviceName">-</span><br>
+    <span class="label">iOS:</span> <span class="value" id="iosVersion">-</span>
+  </div>
+  <div class="quick-places">
+    <span class="quick-btn" onclick="goTo(39.90779,116.39122,'Tiananmen')">Tiananmen</span>
+    <span class="quick-btn" onclick="goTo(39.9086,116.4605,'Guomao')">Guomao</span>
+    <span class="quick-btn" onclick="goTo(39.9940,116.4784,'Wangjing')">Wangjing</span>
+    <span class="quick-btn" onclick="goTo(31.2304,121.4737,'Shanghai')">Shanghai</span>
+    <span class="quick-btn" onclick="goTo(48.8584,2.2945,'Paris')">Paris</span>
+    <span class="quick-btn" onclick="goTo(40.7580,-73.9855,'New York')">New York</span>
+    <span class="quick-btn" onclick="goTo(35.6762,139.6503,'Tokyo')">Tokyo</span>
+  </div>
+  <input type="text" class="search-box" id="search" placeholder="Search places or coordinates...">
+  <div class="coords" id="coords">Click map to select location</div>
+  <button class="btn btn-primary" id="setBtn" onclick="applyLocation()" disabled>Set Location</button>
+  <button class="btn btn-danger" onclick="clearLocation()">Restore Real Location</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var selectedLat = null, selectedLng = null, marker = null;
+var bridge = null; // Will be set by QWebChannel
+
+// QWebChannel setup
+if (typeof QWebChannel !== 'undefined') {
+    new QWebChannel(qt.webChannelTransport, function(channel) {
+        bridge = channel.objects.bridge;
+    });
+}
+
+var map = L.map('map', { zoomControl: false }).setView([39.9087, 116.3975], 13);
+L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+// Amap tiles (fast in China, no API key needed)
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+  subdomains: ['1','2','3','4'], attribution: '&copy; Amap'
+}).addTo(map);
+
+function gcj02ToWgs84(lat, lng) {
+  var a = 6378245.0, ee = 0.00669342162296594323;
+  function transformLat(x, y) {
+    var ret = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+    ret += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI))*2.0/3.0;
+    ret += (20.0*Math.sin(y*Math.PI) + 40.0*Math.sin(y/3.0*Math.PI))*2.0/3.0;
+    ret += (160.0*Math.sin(y/12.0*Math.PI) + 320*Math.sin(y*Math.PI/30.0))*2.0/3.0;
+    return ret;
+  }
+  function transformLng(x, y) {
+    var ret = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+    ret += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI))*2.0/3.0;
+    ret += (20.0*Math.sin(x*Math.PI) + 40.0*Math.sin(x/3.0*Math.PI))*2.0/3.0;
+    ret += (150.0*Math.sin(x/12.0*Math.PI) + 300.0*Math.sin(x/30.0*Math.PI))*2.0/3.0;
+    return ret;
+  }
+  function delta(wgLat, wgLng) {
+    var dLat = transformLat(wgLng-105.0, wgLat-35.0);
+    var dLng = transformLng(wgLng-105.0, wgLat-35.0);
+    var radLat = wgLat/180.0*Math.PI;
+    var magic = Math.sin(radLat);
+    magic = 1 - ee*magic*magic;
+    var sqrtMagic = Math.sqrt(magic);
+    dLat = (dLat*180.0)/((a*(1-ee))/(magic*sqrtMagic)*Math.PI);
+    dLng = (dLng*180.0)/(a/sqrtMagic*Math.cos(radLat)*Math.PI);
+    return [dLat, dLng];
+  }
+  var d = delta(lat, lng);
+  var wgsLat = lat - d[0], wgsLng = lng - d[1];
+  for (var i = 0; i < 10; i++) {
+    var d2 = delta(wgsLat, wgsLng);
+    var latTmp = lat - d2[0], lngTmp = lng - d2[1];
+    if (Math.abs(latTmp-wgsLat) < 1e-6 && Math.abs(lngTmp-wgsLng) < 1e-6) {
+      wgsLat = latTmp; wgsLng = lngTmp; break;
+    }
+    wgsLat = latTmp; wgsLng = lngTmp;
+  }
+  return [parseFloat(wgsLat.toFixed(6)), parseFloat(wgsLng.toFixed(6))];
+}
+
+map.on('click', function(e) {
+  var result = gcj02ToWgs84(e.latlng.lat, e.latlng.lng);
+  selectedLat = result[0];
+  selectedLng = result[1];
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+  document.getElementById('coords').innerHTML =
+    'Lat: <span>' + selectedLat + '</span><br>Lng: <span>' + selectedLng + '</span>';
+  document.getElementById('setBtn').disabled = false;
+});
+
+function goTo(lat, lng, name) {
+  var result = gcj02ToWgs84(lat, lng);
+  selectedLat = result[0];
+  selectedLng = result[1];
+  map.setView([lat, lng], 15);
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lng]).addTo(map).bindPopup(name).openPopup();
+  document.getElementById('coords').innerHTML =
+    'Lat: <span>' + selectedLat + '</span><br>Lng: <span>' + selectedLng + '</span>';
+  document.getElementById('setBtn').disabled = false;
+}
+
+function applyLocation() {
+  if (selectedLat === null || selectedLng === null) return;
+  if (bridge) {
+    bridge.setLocation(selectedLat, selectedLng);
+  }
+}
+
+function clearLocation() {
+  if (bridge) {
+    bridge.clearLocation();
+  }
+}
+
+function showToast(msg, isError) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(function() { t.className = 'toast'; }, 2500);
+}
+
+// Called from Python to update device info
+function updateDeviceInfo(name, version) {
+  document.getElementById('deviceName').textContent = name || '-';
+  document.getElementById('iosVersion').textContent = version || '-';
+}
+
+// Called from Python to show status messages
+function showStatus(msg, isError) {
+  showToast(msg, isError);
+}
+
+// Search via Nominatim (free, no key needed)
+(function() {
+  var input = document.getElementById('search');
+  var composing = false;
+  input.addEventListener('compositionstart', function(){ composing = true; });
+  input.addEventListener('compositionend', function(){ composing = false; });
+  function doSearch() {
+    var val = input.value.trim();
+    if (!val) return;
+    // Direct coordinate input
+    var coordMatch = val.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+    if (coordMatch) {
+      goTo(parseFloat(coordMatch[1]), parseFloat(coordMatch[2]), 'Custom');
+      return;
+    }
+    showToast('Searching...');
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&q='
+      + encodeURIComponent(val) + '&accept-language=zh-CN&limit=1';
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.length > 0) {
+          goTo(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name);
+        } else {
+          showToast('Not found', true);
+        }
+      })
+      .catch(function() { showToast('Search failed', true); });
+  }
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !composing) doSearch();
+  });
+})();
+</script>
+</body>
+</html>
