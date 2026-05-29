@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
+      - name: Build macOS app
+        run: pyinstaller fakegps.spec --clean -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FakeGPS-macOS
+          path: dist/FakeGPS.app
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
+      - name: Build Windows exe
+        run: pyinstaller fakegps.spec --clean -y
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FakeGPS-Windows
+          path: dist/FakeGPS
