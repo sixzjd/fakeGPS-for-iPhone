@@ -117,7 +117,7 @@ fakegps places           # 查看所有地点
 
 搜索功能使用高德 API，需要配置 Key：
 
-1. 访问 https://lbs.amap.com/ 注册账号
+1. 访问 https://console.amap.com/dev/key/app 注册账号
 2. 创建应用，获取 **Web 服务** API Key
 3. 在 GUI 右侧面板输入 Key 并保存
 
