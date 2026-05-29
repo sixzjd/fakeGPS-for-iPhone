@@ -52,6 +52,7 @@ class FakeGPSWindow(QMainWindow):
         self._worker = None
         self._setup_ui()
         self._refresh_devices()
+        self._check_windows_driver()
 
         # Poll document.title every 300ms for JS -> Python communication
         self._title_timer = QTimer(self)
@@ -239,6 +240,42 @@ class FakeGPSWindow(QMainWindow):
         key = self._load_amap_key_value()
         if key:
             self._map_view.page().runJavaScript(f"AMAP_KEY = '{key}';")
+
+    def _check_windows_driver(self):
+        """On Windows, check if Apple Mobile Device USB driver is installed."""
+        if sys.platform != 'win32':
+            return
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['sc', 'query', 'Apple Mobile Device Service'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                self._show_driver_warning()
+        except Exception:
+            self._show_driver_warning()
+
+    def _show_driver_warning(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Apple Driver Required")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText("Apple Mobile Device USB driver not found.")
+        msg.setInformativeText(
+            "iPhone requires Apple drivers to connect via USB.\n\n"
+            "Please install Apple Devices from Microsoft Store (lightweight, ~50MB).\n"
+            "After installation, restart this app."
+        )
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        download_btn = msg.addButton("Open Microsoft Store", QMessageBox.ButtonRole.ActionRole)
+        msg.exec()
+        if msg.clickedButton() == download_btn:
+            QDesktopServices.openUrl(QUrl(
+                "https://apps.microsoft.com/store/detail/apple-devices/9NP83LWLPZ9K"
+            ))
 
     def _load_amap_key_value(self):
         if _CONFIG_FILE.exists():
