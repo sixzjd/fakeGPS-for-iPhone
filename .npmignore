@@ -5,4 +5,10 @@ setup.py
 requirements.txt
 .github/
 .git/
+.gitignore
 .DS_Store
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
