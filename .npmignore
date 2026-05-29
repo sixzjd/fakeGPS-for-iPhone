@@ -1,0 +1,8 @@
+fakegps/
+fakegps.spec
+run_gui.py
+setup.py
+requirements.txt
+.github/
+.git/
+.DS_Store
