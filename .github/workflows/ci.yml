@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint-and-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install Python requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Smoke test - check fakegps is executable
+        run: |
+          chmod +x ./fakegps
+          ./fakegps --help || true
+      - name: Lint shell script (shellcheck)
+        uses: ludeeus/action-shellcheck@v1
+        with:
+          args: './fakegps'

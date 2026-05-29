@@ -84,3 +84,21 @@ def remove_place(name):
         _save_custom(custom)
         return True
     return False
+
+
+def search_places(query):
+    """Fuzzy search places by name or label. Returns list of (name, lat, lng, label)."""
+    query = query.lower().strip()
+    if not query:
+        return []
+    all_places = list_places()
+    results = []
+    for name, (lat, lng, label) in all_places.items():
+        if query in name.lower() or query in label.lower():
+            results.append((name, lat, lng, label))
+    return results
+
+
+def place_exists(name):
+    """Check if a place name exists (builtin or custom)."""
+    return name in list_places()

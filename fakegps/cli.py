@@ -107,8 +107,10 @@ def interactive_mode():
         if cmd in ("exit", "quit", "q"):
             print("Exiting.")
             break
-        elif cmd == "help":
+        elif cmd in ("help", "h"):
             _print_help()
+        elif cmd == "gui":
+            _open_gui()
         elif cmd == "list":
             _print_devices()
         elif cmd == "places":
@@ -182,7 +184,7 @@ def _print_help():
 Commands:
   <place>              Go to built-in or custom place
   /set <lat> <lng>     Set location to coordinates
-  /map                 Open GUI map
+  /gui, /map           Open GUI map
   /clear               Restore real location
   /list                List connected devices
   /places              List all places

@@ -2,9 +2,7 @@
 
 Handles iOS version detection and delegates to the appropriate API:
 - iOS < 17: DtSimulateLocation (lockdown-based)
-- iOS 17+: LocationSimulation via DvtProvider (DVT/instruments-based)
-
-Also manages tunneld status checking.
+- iOS 17+: LocationSimulation via DvtProvider through tunneld
 """
 
 import asyncio
@@ -21,13 +19,25 @@ class DeviceInfo:
 
 
 async def _get_lockdown(serial=None):
-    """Create a lockdown client. Auto-selects first USB device if serial is None."""
     from pymobiledevice3.lockdown import create_using_usbmux
     return await create_using_usbmux(serial=serial)
 
 
+async def _get_lockdown_via_tunneld(udid=None):
+    """Get lockdown client via tunneld (required for iOS 17+ DVT services)."""
+    from pymobiledevice3.tunneld.api import get_tunneld_devices, get_tunneld_device_by_udid, TUNNELD_DEFAULT_ADDRESS
+    if udid:
+        rsd = await get_tunneld_device_by_udid(udid, TUNNELD_DEFAULT_ADDRESS)
+    else:
+        devices = await get_tunneld_devices(TUNNELD_DEFAULT_ADDRESS)
+        if not devices:
+            raise ConnectionError("No devices found via tunneld. Make sure tunneld is running.")
+        rsd = devices[0]
+    return rsd
+
+
 async def list_connected_devices():
-    """List all connected iOS devices. Returns list of DeviceInfo."""
+    """List all connected iOS devices."""
     from pymobiledevice3.usbmux import list_devices
     devices = await list_devices()
     result = []
@@ -51,7 +61,6 @@ async def list_connected_devices():
 
 
 def _ios_major(version_str):
-    """Extract major iOS version number."""
     try:
         return int(version_str.split(".")[0])
     except (ValueError, IndexError):
@@ -59,37 +68,37 @@ def _ios_major(version_str):
 
 
 async def set_location(latitude, longitude, serial=None):
-    """Set simulated GPS location on connected iPhone.
-
-    Automatically selects the correct API based on iOS version.
-    """
+    """Set simulated GPS location on connected iPhone."""
     lockdown = await _get_lockdown(serial=serial)
     try:
         version = lockdown.short_info.get("ProductVersion", "0")
         major = _ios_major(version)
+        udid = lockdown.short_info.get("UniqueDeviceID")
+        await lockdown.close()
 
         if major >= 17:
-            # iOS 17+ uses DVT instruments
+            # iOS 17+ requires tunneld for DVT services
+            rsd = await _get_lockdown_via_tunneld(udid)
             from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
             from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            # Note: DvtProvider is a context manager that keeps the connection open.
-            # For set-and-hold, we need to return the connection objects.
-            # We'll use the lower-level approach.
-            provider = DvtProvider(lockdown)
+            provider = DvtProvider(rsd)
             await provider.__aenter__()
             loc_sim = LocationSimulation(provider)
             await loc_sim.__aenter__()
             await loc_sim.set(latitude, longitude)
-            # Return objects so caller can close them later
-            return {"lockdown": lockdown, "provider": provider, "sim": loc_sim, "ios_major": major}
+            return {"rsd": rsd, "provider": provider, "sim": loc_sim, "ios_major": major}
         else:
             # iOS < 17
+            lockdown = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
             sim = DtSimulateLocation(lockdown)
             await sim.set(latitude, longitude)
             return {"lockdown": lockdown, "sim": sim, "ios_major": major}
     except Exception:
-        await lockdown.close()
+        try:
+            await lockdown.close()
+        except Exception:
+            pass
         raise
 
 
@@ -99,19 +108,24 @@ async def clear_location(serial=None):
     try:
         version = lockdown.short_info.get("ProductVersion", "0")
         major = _ios_major(version)
+        udid = lockdown.short_info.get("UniqueDeviceID")
+        await lockdown.close()
 
         if major >= 17:
+            rsd = await _get_lockdown_via_tunneld(udid)
             from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
             from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            async with DvtProvider(lockdown) as provider:
+            async with DvtProvider(rsd) as provider:
                 async with LocationSimulation(provider) as loc_sim:
                     await loc_sim.clear()
         else:
+            lockdown = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
             sim = DtSimulateLocation(lockdown)
             await sim.clear()
-    finally:
-        await lockdown.close()
+            await lockdown.close()
+    except Exception:
+        raise
 
 
 async def play_gpx_file(filepath, serial=None):
@@ -120,19 +134,24 @@ async def play_gpx_file(filepath, serial=None):
     try:
         version = lockdown.short_info.get("ProductVersion", "0")
         major = _ios_major(version)
+        udid = lockdown.short_info.get("UniqueDeviceID")
+        await lockdown.close()
 
         if major >= 17:
+            rsd = await _get_lockdown_via_tunneld(udid)
             from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
             from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            async with DvtProvider(lockdown) as provider:
+            async with DvtProvider(rsd) as provider:
                 async with LocationSimulation(provider) as loc_sim:
                     await loc_sim.play_gpx_file(filepath)
         else:
+            lockdown = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
             sim = DtSimulateLocation(lockdown)
             await sim.play_gpx_file(filepath)
-    finally:
-        await lockdown.close()
+            await lockdown.close()
+    except Exception:
+        raise
 
 
 def check_tunneld_running():
@@ -144,7 +163,6 @@ def check_tunneld_running():
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        # On Windows, pgrep doesn't exist
         try:
             result = subprocess.run(
                 ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV"],
@@ -156,14 +174,13 @@ def check_tunneld_running():
 
 
 def run_async(coro):
-    """Run an async function synchronously. Safe for nested event loops (e.g. GUI)."""
+    """Run an async function synchronously."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
 
     if loop and loop.is_running():
-        # Already in an event loop (e.g. Qt), use a thread
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(asyncio.run, coro)

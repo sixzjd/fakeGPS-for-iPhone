@@ -5,56 +5,59 @@
 ## 功能特性
 
 - **虚拟定位**：将 iPhone 定位修改到世界上任意位置
-- **图形界面**：交互式地图，点击选点即设定（PyQt6 + Leaflet）
+- **图形界面**：交互式地图，点击选点即定位（高德地图）
 - **命令行模式**：完整的 CLI 交互式 REPL
-- **地图选点**：高德地图点击选点，自动坐标转换
-- **自定义地点**：添加常用位置为快捷命令
-- **轨迹模拟**：支持 GPX 文件播放，模拟步行/驾车轨迹
+- **地点搜索**：高德 API 搜索，下拉框显示结果
+- **GPX 轨迹**：支持 GPX 文件播放，模拟步行/驾车轨迹
 - **坐标转换**：自动 GCJ-02（高德）→ WGS-84（GPS）坐标偏移
 - **跨平台**：支持 macOS 和 Windows
 
-## 环境要求
+## 下载安装
 
-- Python 3.9+
-- iPhone 通过 USB 连接（iOS 17+ 需要 tunneld）
-- 图形界面模式（可选）：PyQt6 + PyQt6-WebEngine
+### 方式一：下载可执行文件（推荐，无需装任何东西）
 
-## 安装
+| 平台 | 下载 | 说明 |
+|------|------|------|
+| macOS | [FakeGPS.app](../../releases/latest) | 双击即用 |
+| Windows | [FakeGPS.exe](../../releases/latest) | 双击即用 |
 
-### npm（推荐）
+下载后直接运行，不需要安装 Python 或任何依赖。
+
+### 方式二：npm（macOS CLI 模式）
 
 ```bash
 npm install -g fakegps
+fakegps --cli
 ```
 
-安装后直接在终端运行 `fakegps`。
-
-### pip
+### 方式三：pip（需要 Python 3.9+）
 
 ```bash
-# 仅命令行模式
+# 仅 CLI
 pip install fakegps
 
-# 包含图形界面
+# 包含 GUI
 pip install fakegps[gui]
 ```
 
-### GitHub
+### 方式四：GitHub 源码
 
 ```bash
 git clone https://github.com/sixzjd/fakeGPS-for-iPhone.git
 cd fakeGPS-for-iPhone
 pip install -r requirements.txt
-
-# 可选：安装图形界面
-pip install PyQt6 PyQt6-WebEngine
+pip install PyQt6 PyQt6-WebEngine  # 可选：GUI 模式
 ```
 
-## 快速开始
+## 环境要求
 
-### 1. 启动隧道服务（iOS 17+ 必须）
+### iPhone 设置
+- 用**数据线**连接（不能只充电的线）
+- iPhone 上点**"信任此电脑"**并输入密码
+- iOS 16+ 需开启**开发者模式**（设置 → 隐私与安全性 → 开发者模式）
 
-在**另一个终端窗口**运行（保持不要关闭）：
+### iOS 17+ 隧道服务
+在**另一个终端**运行（保持不要关闭）：
 
 ```bash
 # macOS
@@ -64,7 +67,9 @@ sudo python3 -m pymobiledevice3 remote tunneld
 python3 -m pymobiledevice3 remote tunneld
 ```
 
-### 2. 图形界面模式（推荐）
+## 使用方式
+
+### 图形界面
 
 ```bash
 fakegps --gui
@@ -72,43 +77,26 @@ fakegps --gui
 python -m fakegps
 ```
 
-图形界面功能：
-- 交互式地图（点击选点）
+功能：
+- 交互式地图（点击选点即定位）
+- 高德 API 地点搜索（需配置 Key）
 - 设备状态显示
 - 预设地点快捷按钮
-- 手动输入坐标
 - GPX 轨迹播放
 - 一键恢复真实定位
 
-### 3. 命令行模式
+### 命令行
 
 ```bash
-# 交互式 REPL
+# 交互模式
 fakegps --cli
-# 或
-python -m fakegps --cli
 
-# 直接执行命令
+# 直接命令
 fakegps tiananmen        # 定位到天安门
 fakegps set 39.9 116.3   # 设置坐标
 fakegps clear            # 恢复真实定位
-fakegps list             # 查看已连接设备
+fakegps list             # 查看设备
 fakegps places           # 查看所有地点
-fakegps play route.gpx   # 播放 GPX 轨迹
-```
-
-### 4. CLI 交互模式
-
-```
-fakegps> tiananmen           # 定位到天安门
-fakegps> /set 39.9 116.3    # 设置坐标
-fakegps> /map               # 打开图形界面
-fakegps> /clear             # 恢复真实定位
-fakegps> /places            # 查看所有地点
-fakegps> /add myhome 39.9 116.3  # 添加自定义地点
-fakegps> /remove myhome     # 删除自定义地点
-fakegps> /play route.gpx    # 播放 GPX 轨迹
-fakegps> /exit              # 退出
 ```
 
 ## 内置地点
@@ -125,67 +113,35 @@ fakegps> /exit              # 退出
 | tokyo | 35.6586, 139.7454 | 东京塔 |
 | london | 51.5074, -0.1278 | 伦敦大本钟 |
 
-## 自定义地点管理
+## 搜索配置
 
-```bash
-# 添加（坐标为高德坐标，自动转换为 WGS-84）
-fakegps add myhome 39.9 116.3
+搜索功能使用高德 API，需要配置 Key：
 
-# 使用
-fakegps myhome
+1. 访问 https://lbs.amap.com/ 注册账号
+2. 创建应用，获取 **Web 服务** API Key
+3. 在 GUI 右侧面板输入 Key 并保存
 
-# 查看所有地点
-fakegps places
-
-# 删除
-fakegps remove myhome
-```
-
-自定义地点保存在 `~/.fakegps_places`（JSON 格式）。
-
-## 坐标系说明
-
-中国境内地图存在坐标偏移问题：
-- **高德/腾讯地图**：使用 GCJ-02 坐标系（有偏移）
-- **iPhone GPS**：使用 WGS-84 坐标系（真实坐标）
-
-本工具自动判断：
-- **中国境内**：高德坐标 (GCJ-02) 自动转换为 GPS 坐标 (WGS-84)
-- **中国境外**：直接使用原始坐标，无需转换
+没有 Key 也可以手动输入坐标定位。
 
 ## Windows 说明
 
-- 需要安装 [iTunes](https://www.apple.com/itunes/) 或 Microsoft Store 的 [Apple Devices](https://apps.microsoft.com/store/detail/apple-devices/9NP83LWLPZ9K) 以支持 USB 设备通信
+- 需要安装 [iTunes](https://www.apple.com/itunes/) 或 [Apple Devices](https://apps.microsoft.com/store/detail/apple-devices/9NP83LWLPZ9K)
 - tunneld 需以管理员身份运行
-- 图形界面需要安装 PyQt6：`pip install PyQt6 PyQt6-WebEngine`
 
 ## 常见问题
 
-**Q: 提示 "No device found"（未找到设备）**
-A: 用数据线连接 iPhone，在手机上点击"信任此电脑"并输入密码。
+**Q: 提示 "No device found"**
+A: 检查数据线是否支持数据传输，iPhone 上是否点了"信任此电脑"。
 
 **Q: 提示 "tunneld not running"（iOS 17+）**
-A: 在单独的终端窗口启动隧道服务：
-```bash
-# macOS
-sudo python3 -m pymobiledevice3 remote tunneld
-# Windows（以管理员身份运行）
-python3 -m pymobiledevice3 remote tunneld
-```
-
-**Q: 定位不准确，有几百米偏差**
-A: 确保使用 v6.0+ 版本，已包含坐标转换功能。
+A: 在单独终端启动：`sudo python3 -m pymobiledevice3 remote tunneld`
 
 **Q: 拔掉数据线后定位恢复了**
-A: 正常行为，虚拟定位需要保持 USB 连接。重启 iPhone 也会恢复真实定位。
-
-## npm 包
-
-https://www.npmjs.com/package/fakegps
+A: 正常行为，虚拟定位需要保持 USB 连接。
 
 ## 免责声明
 
-本工具仅供学习和研究使用。使用者应遵守当地法律法规，不得将其用于任何违法违规用途。使用本工具所产生的一切后果由使用者自行承担。
+本工具仅供学习和研究使用。使用者应遵守当地法律法规。使用本工具所产生的一切后果由使用者自行承担。
 
 ## License
 
