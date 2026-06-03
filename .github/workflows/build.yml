@@ -18,11 +18,18 @@ jobs:
           pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
       - name: Build macOS app
         run: pyinstaller fakegps.spec --clean -y
+      - name: Zip macOS app
+        run: cd dist && zip -r FakeGPS-macOS.zip FakeGPS.app
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FakeGPS-macOS.zip
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: FakeGPS-macOS
-          path: dist/FakeGPS.app
+          path: dist/FakeGPS-macOS.zip
 
   build-windows:
     runs-on: windows-latest
@@ -36,8 +43,15 @@ jobs:
           pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
+      - name: Zip Windows build
+        run: Compress-Archive -Path dist\FakeGPS\* -DestinationPath dist\FakeGPS-Windows.zip
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FakeGPS-Windows.zip
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: FakeGPS-Windows
-          path: dist/FakeGPS
+          path: dist/FakeGPS-Windows.zip
