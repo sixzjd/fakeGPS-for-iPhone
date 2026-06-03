@@ -7,7 +7,8 @@ Handles iOS version detection and delegates to the appropriate API:
 
 import asyncio
 import subprocess
-import platform
+import threading
+import concurrent.futures
 from dataclasses import dataclass
 
 
@@ -84,8 +85,19 @@ async def set_location(latitude, longitude, serial=None):
             provider = DvtProvider(rsd)
             await provider.__aenter__()
             loc_sim = LocationSimulation(provider)
-            await loc_sim.__aenter__()
-            await loc_sim.set(latitude, longitude)
+            try:
+                await loc_sim.__aenter__()
+                await loc_sim.set(latitude, longitude)
+            except Exception:
+                try:
+                    await loc_sim.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                try:
+                    await provider.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                raise
             return {"rsd": rsd, "provider": provider, "sim": loc_sim, "ios_major": major}
         else:
             # iOS < 17
@@ -173,17 +185,38 @@ def check_tunneld_running():
             return False
 
 
-def run_async(coro):
-    """Run an async function synchronously."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
+_loop = None
+_loop_thread = None
 
-    if loop and loop.is_running():
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result()
+
+def _get_persistent_loop():
+    """Get (or create) a persistent background event loop."""
+    global _loop, _loop_thread
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        _loop_thread = threading.Thread(target=_loop.run_forever, daemon=True)
+        _loop_thread.start()
+    return _loop
+
+
+def run_async(coro):
+    """Run an async function synchronously on a persistent event loop."""
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+
+    if running and running.is_running():
+        future = concurrent.futures.Future()
+        async def _wrapper():
+            try:
+                result = await coro
+                future.set_result(result)
+            except Exception as e:
+                future.set_exception(e)
+        running.create_task(_wrapper())
+        return future.result()
     else:
-        return asyncio.run(coro)
+        loop = _get_persistent_loop()
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result()

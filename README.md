@@ -125,7 +125,7 @@ fakegps places           # 查看所有地点
 
 ## Windows 说明
 
-- 需要安装 [iTunes](https://www.apple.com/itunes/) 或 [Apple Devices](https://apps.microsoft.com/store/detail/apple-devices/9NP83LWLPZ9K)
+- 需要安装 [Apple Devices](https://apps.microsoft.com/store/detail/apple-devices/9NP83LWLPZ9K)
 - tunneld 需以管理员身份运行
 
 ## 常见问题

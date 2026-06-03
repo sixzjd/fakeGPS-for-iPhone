@@ -19,7 +19,7 @@ from PyQt6.QtCore import Qt, QUrl, QThread, pyqtSignal, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 import json
-from .core import list_connected_devices, set_location, clear_location, play_gpx_file, run_async
+from .core import list_connected_devices, set_location, clear_location, play_gpx_file, check_tunneld_running, run_async
 from .places import BUILTIN_PLACES
 
 _CONFIG_FILE = Path.home() / ".fakegps_config.json"
@@ -127,13 +127,21 @@ class FakeGPSWindow(QMainWindow):
         api_row.addWidget(self._amap_key_input)
 
         self._save_key_btn = QPushButton("Save")
-        self._save_key_btn.setStyleSheet("background: #00d4ff; color: #1a1a2e; font-weight: bold; padding: 6px 12px; border-radius: 6px;")
+        self._save_key_btn.setStyleSheet("""
+            QPushButton { background: #00d4ff; color: #1a1a2e; font-weight: bold; padding: 6px 12px; border-radius: 6px; }
+            QPushButton:hover { background: #009fcc; }
+            QPushButton:pressed { background: #007a99; }
+        """)
         self._save_key_btn.setFixedHeight(30)
         self._save_key_btn.clicked.connect(self._save_amap_key)
         api_row.addWidget(self._save_key_btn)
 
         self._clear_key_btn = QPushButton("Clear")
-        self._clear_key_btn.setStyleSheet("background: #ff4757; color: #fff; font-weight: bold; padding: 6px 12px; border-radius: 6px;")
+        self._clear_key_btn.setStyleSheet("""
+            QPushButton { background: #ff4757; color: #fff; font-weight: bold; padding: 6px 12px; border-radius: 6px; }
+            QPushButton:hover { background: #cc3945; }
+            QPushButton:pressed { background: #a52e38; }
+        """)
         self._clear_key_btn.setFixedHeight(30)
         self._clear_key_btn.clicked.connect(self._clear_amap_key)
         self._clear_key_btn.setVisible(False)
@@ -150,49 +158,42 @@ class FakeGPSWindow(QMainWindow):
         # Load saved AMap key
         self._load_amap_key()
 
-        # Location group
-        loc_group = QGroupBox("Location")
-        loc_layout = QVBoxLayout(loc_group)
-
-        coord_layout = QHBoxLayout()
+        # Hidden inputs for map SELECT: handler
         self._lat_input = QLineEdit()
-        self._lat_input.setPlaceholderText("Latitude")
-        self._lat_input.setFixedHeight(30)
         self._lng_input = QLineEdit()
-        self._lng_input.setPlaceholderText("Longitude")
-        self._lng_input.setFixedHeight(30)
-        coord_layout.addWidget(self._lat_input)
-        coord_layout.addWidget(self._lng_input)
-        loc_layout.addLayout(coord_layout)
 
-        btn_layout_loc = QHBoxLayout()
-        btn_layout_loc.setSpacing(8)
+        # Tunneld group
+        tunneld_group = QGroupBox("tunneld (iOS 17+)")
+        tunneld_layout = QVBoxLayout(tunneld_group)
 
-        self._set_btn = QPushButton("Set Location")
-        self._set_btn.setStyleSheet("background: #00d4ff; color: #1a1a2e; font-weight: bold; padding: 8px; border-radius: 6px;")
-        self._set_btn.clicked.connect(self._set_location_manual)
-        self._set_btn.setFixedHeight(36)
-        btn_layout_loc.addWidget(self._set_btn)
+        tunneld_cmd = QLineEdit("sudo python3 -m pymobiledevice3 remote tunneld")
+        tunneld_cmd.setReadOnly(True)
+        tunneld_cmd.setFixedHeight(30)
+        tunneld_cmd.setStyleSheet("font-family: monospace; font-size: 12px;")
+        tunneld_layout.addWidget(tunneld_cmd)
 
-        self._clear_btn = QPushButton("Restore GPS")
-        self._clear_btn.setStyleSheet("background: #ff4757; color: #fff; font-weight: bold; padding: 8px; border-radius: 6px;")
-        self._clear_btn.clicked.connect(self._clear_location)
-        self._clear_btn.setFixedHeight(36)
-        btn_layout_loc.addWidget(self._clear_btn)
+        self._copy_btn = QPushButton("Copy Command")
+        self._copy_btn.setStyleSheet("""
+            QPushButton { background: #00d4ff; color: #1a1a2e; font-weight: bold; padding: 8px; border-radius: 6px; }
+            QPushButton:hover { background: #009fcc; }
+            QPushButton:pressed { background: #007a99; }
+        """)
+        self._copy_btn.setFixedHeight(36)
+        self._copy_btn.clicked.connect(lambda: self._copy_tunneld_cmd(tunneld_cmd.text()))
+        tunneld_layout.addWidget(self._copy_btn)
 
-        loc_layout.addLayout(btn_layout_loc)
-
-        self._current_loc_label = QLabel("Current: -")
-        self._current_loc_label.setStyleSheet("color: #00d4ff; font-size: 12px;")
-        loc_layout.addWidget(self._current_loc_label)
-        panel_layout.addWidget(loc_group)
+        panel_layout.addWidget(tunneld_group)
 
         # Quick places group
         places_group = QGroupBox("Quick Places")
         places_layout = QVBoxLayout(places_group)
         for name, (lat, lng, label) in BUILTIN_PLACES.items():
             btn = QPushButton(f"{label}  ({lat}, {lng})")
-            btn.setStyleSheet("text-align: left; padding: 5px 8px; font-size: 12px;")
+            btn.setStyleSheet("""
+                QPushButton { text-align: left; padding: 5px 8px; font-size: 12px; background: transparent; border: 1px solid transparent; border-radius: 4px; }
+                QPushButton:hover { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+                QPushButton:pressed { background: rgba(0,212,255,0.2); }
+            """)
             btn.clicked.connect(lambda checked, n=name, la=lat, lo=lng: self._quick_place(la, lo))
             places_layout.addWidget(btn)
         panel_layout.addWidget(places_group)
@@ -246,15 +247,32 @@ class FakeGPSWindow(QMainWindow):
         if sys.platform != 'win32':
             return
         import subprocess
+        service_names = [
+            'Apple Mobile Device Service',
+            'AppleMobileDeviceService',
+            'Apple Devices Service',
+        ]
+        for name in service_names:
+            try:
+                result = subprocess.run(
+                    ['sc', 'query', name],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    return
+            except Exception:
+                pass
+        # Check registry for Apple Mobile Device USB Driver
         try:
             result = subprocess.run(
-                ['sc', 'query', 'Apple Mobile Device Service'],
+                ['reg', 'query', r'HKLM\SYSTEM\CurrentControlset\Services\Apple Mobile Device Service'],
                 capture_output=True, text=True, timeout=5
             )
-            if result.returncode != 0:
-                self._show_driver_warning()
+            if result.returncode == 0:
+                return
         except Exception:
-            self._show_driver_warning()
+            pass
+        self._show_driver_warning()
 
     def _show_driver_warning(self):
         from PyQt6.QtWidgets import QMessageBox
@@ -410,19 +428,42 @@ class FakeGPSWindow(QMainWindow):
             return
         self._do_set_location(lat, lng)
 
+    def _copy_tunneld_cmd(self, text):
+        QApplication.clipboard().setText(text)
+        self._copy_btn.setText("Copied!")
+        self._copy_btn.setStyleSheet("""
+            QPushButton { background: #27ae60; color: #fff; font-weight: bold; padding: 8px; border-radius: 6px; }
+            QPushButton:hover { background: #1e8449; }
+            QPushButton:pressed { background: #166b3a; }
+        """)
+        QTimer.singleShot(1500, self._reset_copy_btn)
+
+    def _reset_copy_btn(self):
+        self._copy_btn.setText("Copy Command")
+        self._copy_btn.setStyleSheet("""
+            QPushButton { background: #00d4ff; color: #1a1a2e; font-weight: bold; padding: 8px; border-radius: 6px; }
+            QPushButton:hover { background: #009fcc; }
+            QPushButton:pressed { background: #007a99; }
+        """)
+
     def _do_set_location(self, lat, lng):
         serial = self._get_selected_udid()
-        self._set_btn.setEnabled(False)
+        if not check_tunneld_running():
+            self._log_msg("Warning: tunneld not running. For iOS 17+, start it:")
+            self._log_msg("  sudo python3 -m pymobiledevice3 remote tunneld")
+            QMessageBox.warning(self, "tunneld Not Running",
+                "tunneld is required for iOS 17+ devices.\n\n"
+                "Start it in a terminal:\n"
+                "  sudo python3 -m pymobiledevice3 remote tunneld\n\n"
+                "Then try setting the location again.")
+            return
         self._log_msg(f"Setting location: {lat}, {lng}")
 
         def _on_done(result):
             self._active_sim = result
-            self._set_btn.setEnabled(True)
-            self._current_loc_label.setText(f"Current: {lat}, {lng}")
             self._log_msg(f"Location set to ({lat}, {lng})")
 
         def _on_error(err):
-            self._set_btn.setEnabled(True)
             self._log_msg(f"Error: {err}")
             QMessageBox.critical(self, "Error", f"Failed to set location:\n{err}")
 
@@ -433,17 +474,13 @@ class FakeGPSWindow(QMainWindow):
 
     def _clear_location(self):
         serial = self._get_selected_udid()
-        self._clear_btn.setEnabled(False)
         self._log_msg("Restoring real location...")
 
         def _on_done(_):
             self._active_sim = None
-            self._clear_btn.setEnabled(True)
-            self._current_loc_label.setText("Current: - (real)")
             self._log_msg("Real location restored.")
 
         def _on_error(err):
-            self._clear_btn.setEnabled(True)
             self._log_msg(f"Error: {err}")
 
         self._worker = WorkerThread(clear_location, serial)
