@@ -7,7 +7,7 @@ setup(
     author="sixzjd",
     license="MIT",
     packages=find_packages(),
-    package_data={"fakegps": ["map.html"]},
+    package_data={"fakegps": ["map.html", "ui.html"]},
     entry_points={
         "console_scripts": [
             "fakegps=fakegps.cli:main",
@@ -17,7 +17,7 @@ setup(
         "pymobiledevice3>=7.0",
     ],
     extras_require={
-        "gui": ["PyQt6>=6.5", "PyQt6-WebEngine>=6.5"],
+        "gui": ["pywebview>=5.0"],
     },
     python_requires=">=3.9",
     classifiers=[

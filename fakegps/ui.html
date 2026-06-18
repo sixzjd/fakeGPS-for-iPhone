@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FakeGPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0e17;
+  --bg-panel: rgba(12, 18, 32, 0.85);
+  --bg-card: rgba(18, 26, 46, 0.7);
+  --bg-input: rgba(15, 22, 40, 0.9);
+  --border: rgba(0, 212, 255, 0.12);
+  --border-hover: rgba(0, 212, 255, 0.35);
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0, 212, 255, 0.15);
+  --cyan-glow: rgba(0, 212, 255, 0.4);
+  --text: #e8ecf4;
+  --text-dim: #6b7a94;
+  --text-muted: #3d4d66;
+  --danger: #ff4757;
+  --success: #00e676;
+  --warn: #ffab40;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-body: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%; width: 100%;
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ── Layout ── */
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.map-container {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Leaflet overrides */
+.leaflet-control-zoom a {
+  background: var(--bg-panel) !important;
+  color: var(--cyan) !important;
+  border: 1px solid var(--border) !important;
+  backdrop-filter: blur(12px);
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 16px !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--cyan-dim) !important;
+  border-color: var(--border-hover) !important;
+}
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden;
+}
+.leaflet-control-attribution {
+  background: rgba(10,14,23,0.7) !important;
+  color: var(--text-muted) !important;
+  font-size: 10px !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-control-attribution a { color: var(--text-dim) !important; }
+
+/* ── Search Bar Overlay ── */
+.search-overlay {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(480px, calc(100% - 32px));
+}
+
+.search-box {
+  display: flex;
+  gap: 0;
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.05);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.search-box:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(0,212,255,0.15);
+}
+
+.search-box input {
+  flex: 1;
+  padding: 14px 18px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+}
+.search-box input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.search-box button {
+  padding: 14px 20px;
+  background: linear-gradient(135deg, var(--cyan), #0099cc);
+  border: none;
+  color: var(--bg-deep);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: filter 0.2s;
+  text-transform: uppercase;
+}
+.search-box button:hover { filter: brightness(1.15); }
+.search-box button:active { filter: brightness(0.9); }
+
+/* Search Dropdown */
+.search-dropdown {
+  display: none;
+  margin-top: 6px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.search-dropdown::-webkit-scrollbar { width: 4px; }
+.search-dropdown::-webkit-scrollbar-track { background: transparent; }
+.search-dropdown::-webkit-scrollbar-thumb { background: var(--cyan-dim); border-radius: 2px; }
+
+.search-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.15s;
+}
+.search-item:last-child { border-bottom: none; }
+.search-item:hover { background: var(--cyan-dim); }
+.search-item .name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.search-item .addr {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Map Info Bar (bottom-left) ── */
+.map-info {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  transition: border-color 0.3s;
+}
+
+.coords-display {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cyan);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.coords-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--cyan), #0099cc);
+  color: var(--bg-deep);
+}
+.btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+
+.btn-danger {
+  background: rgba(255,71,87,0.15);
+  color: var(--danger);
+  border: 1px solid rgba(255,71,87,0.2);
+}
+.btn-danger:hover { background: rgba(255,71,87,0.25); border-color: rgba(255,71,87,0.4); }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 3000;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast.success {
+  background: rgba(0,230,118,0.15);
+  color: var(--success);
+  border: 1px solid rgba(0,230,118,0.3);
+}
+.toast.error {
+  background: rgba(255,71,87,0.15);
+  color: var(--danger);
+  border: 1px solid rgba(255,71,87,0.3);
+}
+.toast.info {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  border: 1px solid rgba(0,212,255,0.3);
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 360px;
+  min-width: 360px;
+  height: 100vh;
+  background: var(--bg-panel);
+  backdrop-filter: blur(24px);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--cyan), #0066ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 4px 16px rgba(0,212,255,0.3);
+}
+
+.app-title {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.app-version {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px 22px;
+}
+.sidebar-content::-webkit-scrollbar { width: 4px; }
+.sidebar-content::-webkit-scrollbar-track { background: transparent; }
+.sidebar-content::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+
+/* ── Section Cards ── */
+.section {
+  margin-bottom: 16px;
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: border-color 0.3s;
+}
+.card:hover { border-color: var(--border-hover); }
+
+/* ── Device Section ── */
+.device-select-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+select {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236b7a94' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+select:focus { border-color: var(--cyan); }
+select option {
+  background: var(--bg-deep);
+  color: var(--text);
+}
+
+.btn-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: var(--cyan-dim);
+  border: 1px solid rgba(0,212,255,0.2);
+  color: var(--cyan);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.btn-icon:hover {
+  background: rgba(0,212,255,0.25);
+  border-color: var(--cyan);
+}
+
+.device-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.status-dot.connected { background: var(--success); box-shadow: 0 0 8px rgba(0,230,118,0.5); }
+.status-dot.warning { background: var(--warn); box-shadow: 0 0 8px rgba(255,171,64,0.5); }
+
+/* ── Input Fields ── */
+.input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+input[type="text"], input[type="password"] {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+input:focus { border-color: var(--cyan); }
+input::placeholder { color: var(--text-muted); }
+input[readonly] {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.mono-input {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ── API Key Section ── */
+.key-saved {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.key-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.key-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* ── Quick Places ── */
+.places-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.place-btn {
+  padding: 9px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.place-btn:hover {
+  background: var(--cyan-dim);
+  border-color: rgba(0,212,255,0.25);
+  transform: translateY(-1px);
+}
+.place-btn:active { transform: translateY(0); }
+.place-btn .emoji { font-size: 14px; }
+
+/* ── GPX Section ── */
+.gpx-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ── Log Section ── */
+.log-area {
+  background: var(--bg-deep);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.log-area::-webkit-scrollbar { width: 3px; }
+.log-area::-webkit-scrollbar-track { background: transparent; }
+.log-area::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+
+.log-entry { margin-bottom: 2px; }
+.log-entry .time { color: var(--text-muted); margin-right: 6px; }
+.log-entry.error { color: var(--danger); }
+.log-entry.success { color: var(--success); }
+.log-entry.warn { color: var(--warn); }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .sidebar { width: 300px; min-width: 300px; }
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+.pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* ── Scanline effect on map ── */
+.map-container::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,212,255,0.008) 2px,
+    rgba(0,212,255,0.008) 4px
+  );
+}
+
+/* ── Coordinate badge on marker popup ── */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  color: var(--text) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+}
+.leaflet-popup-tip { background: var(--bg-panel) !important; }
+.leaflet-popup-content {
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+  margin: 10px 14px !important;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Map Area ── -->
+  <div class="map-container">
+    <div id="map"></div>
+
+    <!-- Search -->
+    <div class="search-overlay animate-in" style="animation-delay: 0.1s">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search places or enter coordinates..." autocomplete="off" />
+        <button onclick="doSearch()">Search</button>
+      </div>
+      <div class="search-dropdown" id="searchDropdown"></div>
+    </div>
+
+    <!-- Info Bar -->
+    <div class="map-info animate-in" style="animation-delay: 0.2s">
+      <div class="coords-display" id="coordsDisplay">Click map to select</div>
+      <div class="coords-hint" id="coordsHint">Tap anywhere on the map to pick a location</div>
+      <div class="action-row" id="actionBtns" style="display:none">
+        <button class="btn btn-primary" onclick="applyLocation()">Set Location</button>
+        <button class="btn btn-ghost" onclick="copyCoords()">Copy</button>
+      </div>
+      <div class="action-row" style="margin-top: 6px;">
+        <button class="btn btn-danger" onclick="restoreLocation()">Restore Real GPS</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--bg-deep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="app-title">FAKEGPS</div>
+        <div class="app-version">v6.0</div>
+      </div>
+    </div>
+
+    <div class="sidebar-content">
+
+      <!-- Device -->
+      <div class="section animate-in" style="animation-delay: 0.15s">
+        <div class="section-label">Device</div>
+        <div class="card">
+          <div class="device-select-row">
+            <select id="deviceSelect">
+              <option value="">Scanning...</option>
+            </select>
+            <button class="btn-icon" onclick="refreshDevices()" title="Refresh devices">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          </div>
+          <div class="device-status" id="deviceStatus">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">No device connected</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AMap API Key -->
+      <div class="section animate-in" style="animation-delay: 0.2s">
+        <div class="section-label">AMap API Key</div>
+        <div class="card">
+          <div id="keyInputView">
+            <div class="input-row">
+              <input type="password" id="amapKeyInput" placeholder="Enter AMap REST API Key" />
+              <button class="btn btn-primary" onclick="saveKey()" style="white-space:nowrap">Save</button>
+            </div>
+            <div class="key-status">Required for place search</div>
+          </div>
+          <div id="keySavedView" style="display:none">
+            <div class="key-saved">
+              <div>
+                <div class="key-display" id="keyDisplay">****</div>
+                <div class="key-status">Key configured</div>
+              </div>
+              <button class="btn btn-danger" onclick="clearKey()">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tunneld -->
+      <div class="section animate-in" style="animation-delay: 0.25s">
+        <div class="section-label">Tunneld (iOS 17+)</div>
+        <div class="card">
+          <div class="input-row">
+            <input type="text" class="mono-input" id="tunneldCmd" value="sudo python3 -m pymobiledevice3 remote tunneld" readonly />
+            <button class="btn-icon" onclick="copyTunneld()" title="Copy command" id="copyBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Places -->
+      <div class="section animate-in" style="animation-delay: 0.3s">
+        <div class="section-label">Quick Places</div>
+        <div class="card">
+          <div class="places-grid" id="placesGrid"></div>
+        </div>
+      </div>
+
+      <!-- GPX Playback -->
+      <div class="section animate-in" style="animation-delay: 0.35s">
+        <div class="section-label">GPX Playback</div>
+        <div class="card">
+          <div class="gpx-row">
+            <input type="text" id="gpxPath" placeholder="Select .gpx file..." readonly />
+            <button class="btn btn-ghost" onclick="browseGpx()" style="white-space:nowrap">Browse</button>
+          </div>
+          <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Play GPX
+          </button>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="section animate-in" style="animation-delay: 0.4s">
+        <div class="section-label">Log</div>
+        <div class="log-area" id="logArea"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──
+var selectedLat = null, selectedLng = null, marker = null;
+var _lastSetTitle = '';
+var AMAP_KEY = '';
+var _searchTimer = null;
+
+// ── Map Init ──
+var map = L.map('map', {
+  zoomControl: true,
+  attributionControl: true
+}).setView([39.9087, 116.3975], 13);
+
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+  subdomains: ['1','2','3','4'],
+  attribution: '&copy; Amap'
+}).addTo(map);
+
+// Custom marker icon
+var markerIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:20px;height:20px;background:var(--cyan);border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(0,212,255,0.6),0 2px 8px rgba(0,0,0,0.4)"></div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10]
+});
+
+// ── GCJ-02 -> WGS-84 ──
+function gcj02ToWgs84(lat, lng) {
+  var a=6378245.0,ee=0.00669342162296594323;
+  function tl(x,y){var r=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;r+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;return r;}
+  function tg(x,y){var r=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;r+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;return r;}
+  var dlat=tl(lng-105,lat-35),dlng=tg(lng-105,lat-35);
+  var rl=lat/180*Math.PI,mg=Math.sin(rl);mg=1-ee*mg*mg;var sq=Math.sqrt(mg);
+  dlat=(dlat*180)/((a*(1-ee))/(mg*sq)*Math.PI);
+  dlng=(dlng*180)/(a/sq*Math.cos(rl)*Math.PI);
+  return [parseFloat((lat*2-(lat+dlat)).toFixed(6)),parseFloat((lng*2-(lng+dlng)).toFixed(6))];
+}
+
+// ── Select Point ──
+function selectPoint(lat, lng) {
+  var result = gcj02ToWgs84(lat, lng);
+  selectedLat = result[0]; selectedLng = result[1];
+  document.getElementById('coordsDisplay').textContent = selectedLat + ', ' + selectedLng;
+  document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
+  document.getElementById('actionBtns').style.display = 'flex';
+  // Notify Python
+  var title = 'SELECT:' + selectedLat + ',' + selectedLng;
+  if (document.title !== title) document.title = title;
+}
+
+// ── Map Click ──
+map.on('click', function(e) {
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([e.latlng.lat, e.latlng.lng], {icon: markerIcon}).addTo(map);
+  selectPoint(e.latlng.lat, e.latlng.lng);
+});
+
+// ── Actions ──
+function applyLocation() {
+  if (selectedLat === null) return;
+  document.title = 'SET:' + selectedLat + ',' + selectedLng;
+  document.getElementById('coordsHint').textContent = 'Setting location...';
+  // Call pywebview API if available
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.set_location(selectedLat, selectedLng);
+  }
+}
+
+function copyCoords() {
+  if (selectedLat === null) return;
+  var text = selectedLat + ', ' + selectedLng;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Copied: ' + text, 'success');
+    });
+  } else {
+    // Fallback for pywebview
+    if (window.pywebview && window.pywebview.api) {
+      window.pywebview.api.copy_text(text);
+    }
+    showToast('Copied: ' + text, 'success');
+  }
+}
+
+function restoreLocation() {
+  document.title = 'CLEAR:now';
+  document.getElementById('coordsHint').textContent = 'Restoring real location...';
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.clear_location();
+  }
+}
+
+// ── Search ──
+function doSearch() {
+  var val = document.getElementById('searchInput').value.trim();
+  if (!val) { hideDropdown(); return; }
+  // Direct coordinate input
+  var coordMatch = val.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+  if (coordMatch) {
+    var lat = parseFloat(coordMatch[1]), lng = parseFloat(coordMatch[2]);
+    map.setView([lat, lng], 15);
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([lat, lng], {icon: markerIcon}).addTo(map);
+    selectPoint(lat, lng);
+    hideDropdown();
+    return;
+  }
+  showToast('Searching...', 'info');
+  if (AMAP_KEY) {
+    var amapUrl = 'https://restapi.amap.com/v3/place/text?key=' + AMAP_KEY
+      + '&keywords=' + encodeURIComponent(val) + '&output=json&offset=10';
+    fetch(amapUrl)
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.pois && data.pois.length > 0){
+          showDropdown(data.pois.map(function(poi){
+            var loc = poi.location.split(',');
+            var city = poi.cityname || poi.adname || '';
+            var addr = poi.address || '';
+            return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0])};
+          }));
+        } else { showToast('Not found', 'error'); hideDropdown(); }
+      })
+      .catch(function(){ showToast('Search failed', 'error'); hideDropdown(); });
+    return;
+  }
+  // Fallback: Nominatim
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&q='
+    + encodeURIComponent(val) + '&accept-language=zh-CN&limit=8';
+  Promise.race([
+    fetch(url, {headers:{'Accept':'application/json'}}),
+    new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
+  ])
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data && data.length > 0){
+        showDropdown(data.map(function(item){
+          return {name: item.display_name.split(',')[0], address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon)};
+        }));
+      } else { showToast('Not found', 'error'); hideDropdown(); }
+    })
+    .catch(function(){ showToast('Search failed. Set AMap Key for better results.', 'error'); hideDropdown(); });
+}
+
+function showDropdown(results) {
+  var dd = document.getElementById('searchDropdown');
+  dd.innerHTML = '';
+  results.forEach(function(r) {
+    var item = document.createElement('div');
+    item.className = 'search-item';
+    item.innerHTML = '<div class="name">' + r.name + '</div><div class="addr">' + r.address + '</div>';
+    item.onclick = function() {
+      map.setView([r.lat, r.lng], 15);
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([r.lat, r.lng], {icon: markerIcon}).addTo(map).bindPopup(r.name).openPopup();
+      selectPoint(r.lat, r.lng);
+      hideDropdown();
+      document.getElementById('searchInput').value = r.name;
+    };
+    dd.appendChild(item);
+  });
+  dd.style.display = 'block';
+}
+
+function hideDropdown() {
+  document.getElementById('searchDropdown').style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-overlay')) hideDropdown();
+});
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(_searchTimer);
+  if (this.value.trim().length < 2) { hideDropdown(); return; }
+  _searchTimer = setTimeout(doSearch, 400);
+});
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+
+// ── Toast ──
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || 'info');
+  setTimeout(function(){ t.className = 'toast'; }, 2500);
+}
+
+// ── Quick Places ──
+var BUILTIN_PLACES = [
+  {emoji: '🏛', label: '天安门', lat: 39.90779, lng: 116.39122},
+  {emoji: '🏙', label: '国贸CBD', lat: 39.90727, lng: 116.45877},
+  {emoji: '🏢', label: '望京SOGO', lat: 39.99271, lng: 116.47673},
+  {emoji: '🌇', label: '上海外滩', lat: 31.24050, lng: 121.48621},
+  {emoji: '🏘', label: '深圳市民中心', lat: 22.54600, lng: 114.05790},
+  {emoji: '🇫🇷', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
+  {emoji: '🇺🇸', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
+  {emoji: '🇯🇵', label: '东京塔', lat: 35.6586, lng: 139.7454},
+  {emoji: '🇬🇧', label: '伦敦大本钟', lat: 51.5074, lng: -0.1278}
+];
+
+(function() {
+  var grid = document.getElementById('placesGrid');
+  BUILTIN_PLACES.forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.className = 'place-btn';
+    btn.innerHTML = '<span class="emoji">' + p.emoji + '</span>' + p.label;
+    btn.onclick = function() {
+      // Places store WGS-84 coords — apply directly, no GCJ-02 conversion
+      selectedLat = p.lat; selectedLng = p.lng;
+      document.getElementById('coordsDisplay').textContent = p.lat + ', ' + p.lng;
+      document.getElementById('coordsHint').textContent = 'Setting ' + p.label + '...';
+      document.getElementById('actionBtns').style.display = 'flex';
+      // Show marker at GCJ-02 position (approximate, for display on Amap tiles)
+      map.setView([p.lat, p.lng], 15);
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([p.lat, p.lng], {icon: markerIcon}).addTo(map);
+      // Auto-apply via title bridge (Python reads SET: from title)
+      document.title = 'SET:' + p.lat + ',' + p.lng;
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.set_location(p.lat, p.lng);
+      }
+    };
+    grid.appendChild(btn);
+  });
+})();
+
+// ── Tunneld Copy ──
+function copyTunneld() {
+  var cmd = document.getElementById('tunneldCmd').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(cmd);
+  }
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.copy_text(cmd);
+  }
+  var btn = document.getElementById('copyBtn');
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  setTimeout(function() {
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  }, 1500);
+  showToast('Command copied', 'success');
+}
+
+// ── GPX ──
+function browseGpx() {
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.browse_gpx();
+  }
+}
+
+function playGpx() {
+  var path = document.getElementById('gpxPath').value;
+  if (!path) { showToast('Please select a GPX file first', 'error'); return; }
+  document.getElementById('playGpxBtn').disabled = true;
+  document.getElementById('playGpxBtn').textContent = 'Playing...';
+  logMsg('Playing GPX: ' + path);
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.play_gpx(path);
+  }
+}
+
+function gpxFinished() {
+  document.getElementById('playGpxBtn').disabled = false;
+  document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play GPX';
+  logMsg('GPX playback finished.');
+}
+
+// ── AMap Key ──
+function saveKey() {
+  var key = document.getElementById('amapKeyInput').value.trim();
+  if (!key) return;
+  AMAP_KEY = key;
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.save_amap_key(key);
+  }
+  showKeySaved(key);
+  showToast('AMap Key saved', 'success');
+  logMsg('AMap Key saved.');
+}
+
+function clearKey() {
+  AMAP_KEY = '';
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.clear_amap_key();
+  }
+  document.getElementById('keyInputView').style.display = 'block';
+  document.getElementById('keySavedView').style.display = 'none';
+  document.getElementById('amapKeyInput').value = '';
+  showToast('AMap Key cleared', 'info');
+  logMsg('AMap Key cleared.');
+}
+
+function showKeySaved(key) {
+  var masked = key.length > 8 ? key.substring(0, 4) + '****' + key.substring(key.length - 4) : '****';
+  document.getElementById('keyDisplay').textContent = 'Key: ' + masked;
+  document.getElementById('keyInputView').style.display = 'none';
+  document.getElementById('keySavedView').style.display = 'block';
+}
+
+function setAmapKey(key) {
+  AMAP_KEY = key;
+  if (key) {
+    showKeySaved(key);
+  }
+}
+
+// ── Device Management (called from Python) ──
+function updateDeviceList(devices) {
+  var sel = document.getElementById('deviceSelect');
+  sel.innerHTML = '';
+  if (!devices || devices.length === 0) {
+    sel.innerHTML = '<option value="">No device found</option>';
+    document.getElementById('statusDot').className = 'status-dot';
+    document.getElementById('statusText').textContent = 'No device connected';
+    return;
+  }
+  devices.forEach(function(d, i) {
+    var opt = document.createElement('option');
+    opt.value = d.udid;
+    opt.textContent = d.name + ' (iOS ' + d.ios_version + ')';
+    sel.appendChild(opt);
+  });
+  document.getElementById('statusDot').className = 'status-dot connected';
+  document.getElementById('statusText').textContent = devices.length + ' device(s) connected';
+  // Update hint with first device
+  var d = devices[0];
+  document.getElementById('coordsHint').textContent = 'Device: ' + d.name + ' (iOS ' + d.ios_version + ')';
+}
+
+function setDeviceError(err) {
+  document.getElementById('statusDot').className = 'status-dot warning';
+  document.getElementById('statusText').textContent = 'Error: ' + err;
+}
+
+function refreshDevices() {
+  document.getElementById('statusText').textContent = 'Scanning...';
+  document.getElementById('statusDot').className = 'status-dot pulse';
+  logMsg('Scanning for devices...');
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.refresh_devices();
+  } else {
+    // Fallback for document.title bridge
+    document.title = 'REFRESH_DEVICES:now';
+  }
+}
+
+// ── GPX path (called from Python) ──
+function setGpxPath(path) {
+  document.getElementById('gpxPath').value = path;
+}
+
+// ── Log ──
+function logMsg(msg, type) {
+  var area = document.getElementById('logArea');
+  var entry = document.createElement('div');
+  entry.className = 'log-entry' + (type ? ' ' + type : '');
+  var now = new Date();
+  var time = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+  entry.innerHTML = '<span class="time">' + time + '</span>' + msg;
+  area.appendChild(entry);
+  area.scrollTop = area.scrollHeight;
+}
+
+// ── pywebview bridge (preferred) ──
+window.addEventListener('pywebviewready', function() {
+  // pywebview is ready, load initial data
+  if (window.pywebview.api.get_amap_key) {
+    window.pywebview.api.get_amap_key().then(function(key) {
+      if (key) setAmapKey(key);
+    });
+  }
+  refreshDevices();
+});
+
+// ── Legacy document.title bridge (fallback for non-pywebview mode) ──
+(function pollTitle() {
+  var title = document.title;
+  if (title !== _lastSetTitle && title !== 'FakeGPS') {
+    _lastSetTitle = title;
+  }
+  setTimeout(pollTitle, 300);
+})();
+</script>
+</body>
+</html>

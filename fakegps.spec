@@ -5,12 +5,25 @@ from pathlib import Path
 block_cipher = None
 src_root = Path(SPECPATH)
 
+# ── Modules to exclude ──
+EXCLUDED_MODULES = [
+    'IPython', 'ipython', 'ipykernel', 'ipywidgets',
+    'jedi', 'parso', 'prompt_toolkit', 'pygments',
+    'traitlets', 'nbformat', 'nbclient', 'notebook',
+    'PIL', 'Pillow', 'pillow',
+    'setuptools', 'distutils', 'pkg_resources',
+    'pytest', 'unittest2',
+    'trio', 'twisted', 'gevent',
+    'matplotlib', 'numpy', 'pandas', 'scipy',
+    'tkinter', '_tkinter', 'turtle',
+]
+
 a = Analysis(
     [str(src_root / 'run_gui.py')],
     pathex=[str(src_root)],
     binaries=[],
     datas=[
-        (str(src_root / 'fakegps' / 'map.html'), 'fakegps'),
+        (str(src_root / 'fakegps' / 'ui.html'), 'fakegps'),
     ],
     hiddenimports=[
         'pymobiledevice3',
@@ -22,11 +35,19 @@ a = Analysis(
         'pymobiledevice3.tunneld.api',
         'pymobiledevice3.tunneld.server',
         'pymobiledevice3.remote.remote_service_discovery',
+        'webview',
+        'webview.platforms',
+        'webview.platforms.cocoa',
+        'webview.platforms.edgechromium',
+        'webview.platforms.gtk',
+        'webview.platforms.qt',
+        'webview.platforms.winforms',
+        'webview.util',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=EXCLUDED_MODULES,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -44,9 +65,9 @@ exe = EXE(
     name='FakeGPS',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
-    console=False,  # No terminal window for GUI
+    console=False,
     disable_windowed_traceback=False,
 )
 
@@ -55,7 +76,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     name='FakeGPS',

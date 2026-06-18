@@ -176,7 +176,7 @@ def _open_gui():
         from .gui import main as gui_main
         gui_main()
     except ImportError:
-        print("GUI not available. Install PyQt6: pip install PyQt6 PyQt6-WebEngine")
+        print("GUI not available. Install pywebview: pip install pywebview")
 
 
 def _print_help():
@@ -220,7 +220,7 @@ def main():
     # If no command at all and not --cli, try GUI first
     if args.command is None and not args.cli:
         try:
-            from PyQt6.QtWidgets import QApplication
+            import webview
             _open_gui()
             return
         except ImportError:

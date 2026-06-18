@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
+          pip install pymobiledevice3 pywebview pyinstaller
       - name: Build macOS app
         run: pyinstaller fakegps.spec --clean -y
       - name: Zip macOS app
@@ -43,7 +43,7 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install pymobiledevice3 PyQt6 PyQt6-WebEngine pyinstaller
+          pip install pymobiledevice3 pywebview pyinstaller
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
       - name: Zip Windows build
