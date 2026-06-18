@@ -11,7 +11,7 @@ EXCLUDED_MODULES = [
     'jedi', 'parso', 'prompt_toolkit', 'pygments',
     'traitlets', 'nbformat', 'nbclient', 'notebook',
     'PIL', 'Pillow', 'pillow',
-    'setuptools', 'distutils', 'pkg_resources',
+    'setuptools', 'pkg_resources',
     'pytest', 'unittest2',
     'trio', 'twisted', 'gevent',
     'matplotlib', 'numpy', 'pandas', 'scipy',
