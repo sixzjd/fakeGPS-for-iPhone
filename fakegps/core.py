@@ -43,21 +43,38 @@ async def list_connected_devices():
     devices = await list_devices()
     result = []
     for dev in devices:
+        name = ""
+        ios_version = ""
+        udid = dev.serial
         try:
             lockdown = await _get_lockdown(serial=dev.serial)
-            info = lockdown.short_info
-            result.append(DeviceInfo(
-                udid=info.get("UniqueDeviceID", dev.serial),
-                name=info.get("DeviceName", "Unknown"),
-                ios_version=info.get("ProductVersion", "Unknown"),
-            ))
+            # short_info reads from all_values (populated during init)
+            info = lockdown.short_info or {}
+            name = info.get("DeviceName") or ""
+            ios_version = info.get("ProductVersion") or ""
+            udid = info.get("UniqueDeviceID") or dev.serial
+            # Fallback: fresh query via get_value (async, queries device directly)
+            if not name or not ios_version:
+                try:
+                    name = name or await lockdown.get_value("DeviceName") or ""
+                    ios_version = ios_version or await lockdown.get_value("ProductVersion") or ""
+                except Exception:
+                    pass
+            # Final fallbacks
+            if not name:
+                try:
+                    name = lockdown.product_type or ""
+                except Exception:
+                    pass
+            if not name:
+                name = f"iPhone ({dev.serial[:8]}...)"
+            if not ios_version:
+                ios_version = "Unknown"
             await lockdown.close()
-        except Exception:
-            result.append(DeviceInfo(
-                udid=dev.serial,
-                name="Unknown",
-                ios_version="Unknown",
-            ))
+        except Exception as e:
+            name = name or f"Device ({dev.serial[:8]}...)"
+            ios_version = ios_version or "Unknown"
+        result.append(DeviceInfo(udid=udid, name=name, ios_version=ios_version))
     return result
 
 
@@ -70,11 +87,27 @@ def _ios_major(version_str):
 
 async def set_location(latitude, longitude, serial=None):
     """Set simulated GPS location on connected iPhone."""
+    latitude = float(latitude)
+    longitude = float(longitude)
     lockdown = await _get_lockdown(serial=serial)
     try:
-        version = lockdown.short_info.get("ProductVersion", "0")
+        # Get iOS version with multiple fallbacks
+        version = "0"
+        udid = None
+        try:
+            info = lockdown.short_info or {}
+            version = info.get("ProductVersion") or ""
+            udid = info.get("UniqueDeviceID") or lockdown.udid
+        except Exception:
+            pass
+        if not version or version == "0":
+            try:
+                version = lockdown.product_version or "0"
+            except Exception:
+                pass
+        if not udid:
+            udid = lockdown.udid
         major = _ios_major(version)
-        udid = lockdown.short_info.get("UniqueDeviceID")
         await lockdown.close()
 
         if major >= 17:
@@ -100,12 +133,12 @@ async def set_location(latitude, longitude, serial=None):
                 raise
             return {"rsd": rsd, "provider": provider, "sim": loc_sim, "ios_major": major}
         else:
-            # iOS < 17
-            lockdown = await _get_lockdown(serial=serial)
+            # iOS < 17: use DtSimulateLocation directly
+            lockdown2 = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown)
+            sim = DtSimulateLocation(lockdown2)
             await sim.set(latitude, longitude)
-            return {"lockdown": lockdown, "sim": sim, "ios_major": major}
+            return {"lockdown": lockdown2, "sim": sim, "ios_major": major}
     except Exception:
         try:
             await lockdown.close()
@@ -118,9 +151,22 @@ async def clear_location(serial=None):
     """Clear simulated location (restore real GPS)."""
     lockdown = await _get_lockdown(serial=serial)
     try:
-        version = lockdown.short_info.get("ProductVersion", "0")
+        version = "0"
+        udid = None
+        try:
+            info = lockdown.short_info or {}
+            version = info.get("ProductVersion") or ""
+            udid = info.get("UniqueDeviceID") or lockdown.udid
+        except Exception:
+            pass
+        if not version or version == "0":
+            try:
+                version = lockdown.product_version or "0"
+            except Exception:
+                pass
+        if not udid:
+            udid = lockdown.udid
         major = _ios_major(version)
-        udid = lockdown.short_info.get("UniqueDeviceID")
         await lockdown.close()
 
         if major >= 17:
@@ -131,11 +177,11 @@ async def clear_location(serial=None):
                 async with LocationSimulation(provider) as loc_sim:
                     await loc_sim.clear()
         else:
-            lockdown = await _get_lockdown(serial=serial)
+            lockdown2 = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown)
+            sim = DtSimulateLocation(lockdown2)
             await sim.clear()
-            await lockdown.close()
+            await lockdown2.close()
     except Exception:
         raise
 
@@ -144,9 +190,22 @@ async def play_gpx_file(filepath, serial=None):
     """Play a GPX file trajectory on the device."""
     lockdown = await _get_lockdown(serial=serial)
     try:
-        version = lockdown.short_info.get("ProductVersion", "0")
+        version = "0"
+        udid = None
+        try:
+            info = lockdown.short_info or {}
+            version = info.get("ProductVersion") or ""
+            udid = info.get("UniqueDeviceID") or lockdown.udid
+        except Exception:
+            pass
+        if not version or version == "0":
+            try:
+                version = lockdown.product_version or "0"
+            except Exception:
+                pass
+        if not udid:
+            udid = lockdown.udid
         major = _ios_major(version)
-        udid = lockdown.short_info.get("UniqueDeviceID")
         await lockdown.close()
 
         if major >= 17:
@@ -157,11 +216,11 @@ async def play_gpx_file(filepath, serial=None):
                 async with LocationSimulation(provider) as loc_sim:
                     await loc_sim.play_gpx_file(filepath)
         else:
-            lockdown = await _get_lockdown(serial=serial)
+            lockdown2 = await _get_lockdown(serial=serial)
             from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown)
+            sim = DtSimulateLocation(lockdown2)
             await sim.play_gpx_file(filepath)
-            await lockdown.close()
+            await lockdown2.close()
     except Exception:
         raise
 

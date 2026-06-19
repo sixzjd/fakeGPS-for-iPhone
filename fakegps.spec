@@ -5,17 +5,29 @@ from pathlib import Path
 block_cipher = None
 src_root = Path(SPECPATH)
 
-# ── Modules to exclude ──
+# ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
+    # IPython & friends
     'IPython', 'ipython', 'ipykernel', 'ipywidgets',
     'jedi', 'parso', 'prompt_toolkit', 'pygments',
     'traitlets', 'nbformat', 'nbclient', 'notebook',
+    # Image processing (not used)
     'PIL', 'Pillow', 'pillow',
-    'setuptools', 'pkg_resources',
+    # Packaging (not needed at runtime)
+    'setuptools', 'distutils', 'pkg_resources',
+    # Testing
     'pytest', 'unittest2',
+    # Unused async frameworks
     'trio', 'twisted', 'gevent',
+    # Heavy scientific packages
     'matplotlib', 'numpy', 'pandas', 'scipy',
     'tkinter', '_tkinter', 'turtle',
+    # Cross-platform webview backends we don't need
+    # (macOS uses cocoa, Windows uses edgechromium — exclude qt/gtk backends)
+    'webview.platforms.qt',
+    'webview.platforms.gtk',
+    # PyQt6 is no longer used (switched to pywebview)
+    'PyQt6', 'PyQt5', 'PySide6', 'PySide2',
 ]
 
 a = Analysis(
@@ -39,14 +51,12 @@ a = Analysis(
         'webview.platforms',
         'webview.platforms.cocoa',
         'webview.platforms.edgechromium',
-        'webview.platforms.gtk',
-        'webview.platforms.qt',
         'webview.platforms.winforms',
         'webview.util',
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(src_root / 'hook_stub_modules.py')],
     excludes=EXCLUDED_MODULES,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -56,6 +66,12 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Platform-specific icon
+if sys.platform == 'darwin':
+    app_icon = str(src_root / 'icon.icns')
+else:
+    app_icon = str(src_root / 'icon.ico')
+
 # GUI executable
 exe = EXE(
     pyz,
@@ -63,6 +79,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='FakeGPS',
+    icon=app_icon,
     debug=False,
     bootloader_ignore_signals=False,
     strip=True,
@@ -87,10 +104,10 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='FakeGPS.app',
-        icon=None,
+        icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.0.0',
+            'CFBundleShortVersionString': '6.0.1',
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

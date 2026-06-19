@@ -374,12 +374,16 @@ html, body {
 /* ── Device Section ── */
 .device-select-row {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+  width: 100%;
+  overflow: hidden;
 }
 
 select {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 10px 12px;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -645,7 +649,7 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.0</div>
+        <div class="app-version">v6.0.1</div>
       </div>
     </div>
 
@@ -818,16 +822,16 @@ function applyLocation() {
 function copyCoords() {
   if (selectedLat === null) return;
   var text = selectedLat + ', ' + selectedLng;
-  if (navigator.clipboard) {
+  // Use pywebview native clipboard (navigator.clipboard needs HTTPS)
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.copy_text(text);
+    showToast('Copied: ' + text, 'success');
+  } else if (navigator.clipboard) {
     navigator.clipboard.writeText(text).then(function() {
       showToast('Copied: ' + text, 'success');
+    }).catch(function() {
+      showToast('Copy failed', 'error');
     });
-  } else {
-    // Fallback for pywebview
-    if (window.pywebview && window.pywebview.api) {
-      window.pywebview.api.copy_text(text);
-    }
-    showToast('Copied: ' + text, 'success');
   }
 }
 
@@ -978,11 +982,11 @@ var BUILTIN_PLACES = [
 // ── Tunneld Copy ──
 function copyTunneld() {
   var cmd = document.getElementById('tunneldCmd').value;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(cmd);
-  }
+  // Use pywebview native clipboard (navigator.clipboard needs HTTPS)
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.copy_text(cmd);
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(cmd);
   }
   var btn = document.getElementById('copyBtn');
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';

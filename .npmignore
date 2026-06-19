@@ -12,3 +12,7 @@ build/
 *.egg-info/
 __pycache__/
 *.pyc
+*.icns
+*.ico
+*.png
+hook_stub_modules.py

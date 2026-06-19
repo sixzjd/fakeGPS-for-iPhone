@@ -32,6 +32,30 @@ class API:
     def set_window(self, window):
         self._window = window
 
+    def _cleanup_active_sim(self):
+        """Close previous location simulation to free the DVT session."""
+        if self._active_sim:
+            try:
+                from .core import run_async
+                sim = self._active_sim
+                ios_major = sim.get("ios_major", 0)
+                if ios_major >= 17:
+                    # iOS 17+: close LocationSimulation and DvtProvider
+                    loc_sim = sim.get("sim")
+                    provider = sim.get("provider")
+                    if loc_sim:
+                        run_async(loc_sim.__aexit__(None, None, None))
+                    if provider:
+                        run_async(provider.__aexit__(None, None, None))
+                else:
+                    # iOS <17: close lockdown
+                    lockdown = sim.get("lockdown")
+                    if lockdown:
+                        run_async(lockdown.close())
+            except Exception:
+                pass
+            self._active_sim = None
+
     def _js(self, code):
         """Evaluate JavaScript in the webview."""
         if self._window:
@@ -50,16 +74,19 @@ class API:
                     self._js("updateDeviceList([])")
                     self._js("logMsg('No devices found.')")
                     return
+                for d in devices:
+                    self._js(f"logMsg('Device: {d.name} | iOS {d.ios_version} | UDID: {d.udid[:12]}...')")
                 devs_json = json.dumps([{
                     "udid": d.udid,
                     "name": d.name,
                     "ios_version": d.ios_version
                 } for d in devices])
                 self._js(f"updateDeviceList({devs_json})")
-                self._js(f"logMsg('Found {len(devices)} device(s).')")
+                self._js(f"logMsg('Found {len(devices)} device(s).', 'success')")
             except Exception as e:
-                self._js(f"setDeviceError('{str(e).replace(chr(39), chr(92) + chr(39))}')")
-                self._js(f"logMsg('Error: {str(e).replace(chr(39), chr(92) + chr(39))}', 'error')")
+                err = str(e).replace(chr(39), chr(92) + chr(39)).replace("\n", " ")
+                self._js(f"setDeviceError('{err}')")
+                self._js(f"logMsg('Device scan error: {err}', 'error')")
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -69,23 +96,36 @@ class API:
         """Set simulated GPS location on the connected iPhone."""
         from .core import set_location, check_tunneld_running, run_async
 
-        if not check_tunneld_running():
-            self._js("logMsg('Warning: tunneld not running. For iOS 17+, start it first.', 'warn')")
-            self._js("showToast('tunneld not running — see log', 'error')")
+        # Clean up previous simulation if any
+        self._cleanup_active_sim()
+
+        # Coerce to float (JS might pass strings)
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (TypeError, ValueError) as e:
+            self._js(f"logMsg('Invalid coordinates: {e}', 'error')")
             return
 
         def _worker():
             try:
                 self._js(f"logMsg('Setting location: {lat}, {lng}')")
                 result = run_async(set_location(lat, lng))
+                # Keep references alive so the simulation persists
                 self._active_sim = result
-                self._js(f"logMsg('Location set to ({lat}, {lng})', 'success')")
+                ios_major = result.get("ios_major", "?")
+                self._js(f"logMsg('Location set to ({lat}, {lng}) [iOS {ios_major}]', 'success')")
                 self._js("showToast('Location set!', 'success')")
                 self._js("document.getElementById('coordsHint').textContent = 'Location active'")
             except Exception as e:
-                err = str(e).replace("'", "\\'")
-                self._js(f"logMsg('Error: {err}', 'error')")
+                err = str(e).replace("'", "\\'").replace("\n", " ")
+                self._js(f"logMsg('Set location error: {err}', 'error')")
                 self._js(f"showToast('Failed: {err}', 'error')")
+                # Check tunneld only after failure, as a hint
+                if not check_tunneld_running():
+                    self._js("logMsg('Hint: tunneld not running. For iOS 17+, run the sudo command first.', 'warn')")
+                else:
+                    self._js("logMsg('tunneld is running. Check device connection and try again.', 'warn')")
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -93,11 +133,13 @@ class API:
         """Clear simulated location (restore real GPS)."""
         from .core import clear_location, run_async
 
+        # Clean up active simulation first
+        self._cleanup_active_sim()
+
         def _worker():
             try:
                 self._js("logMsg('Restoring real location...')")
                 run_async(clear_location())
-                self._active_sim = None
                 self._js("logMsg('Real location restored.', 'success')")
                 self._js("showToast('Real location restored', 'success')")
                 self._js("document.getElementById('coordsHint').textContent = 'Real location active'")
@@ -182,12 +224,19 @@ class API:
     # ── Utilities ──
 
     def copy_text(self, text):
-        """Copy text to clipboard."""
-        import webview
+        """Copy text to clipboard using native OS clipboard (navigator.clipboard
+        requires HTTPS secure context which pywebview local HTML doesn't have)."""
+        import subprocess
         try:
-            webview.windows[0].evaluate_js(
-                f"navigator.clipboard.writeText('{text.replace(chr(39), chr(92) + chr(39))}')"
-            )
+            if sys.platform == 'darwin':
+                process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+                process.communicate(text.encode('utf-8'))
+            elif sys.platform == 'win32':
+                process = subprocess.Popen(['clip.exe'], stdin=subprocess.PIPE)
+                process.communicate(text.encode('utf-16-le'))
+            else:
+                process = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+                process.communicate(text.encode('utf-8'))
         except Exception:
             pass
 
@@ -200,7 +249,7 @@ def main():
     html_content = html_path.read_text(encoding="utf-8")
 
     window = webview.create_window(
-        title="FakeGPS v6.0",
+        title="FakeGPS v6.0.1",
         html=html_content,
         js_api=api,
         width=1280,
@@ -211,12 +260,13 @@ def main():
     api.set_window(window)
 
     def on_closed():
-        if api._active_sim:
-            try:
-                from .core import clear_location, run_async
-                run_async(clear_location())
-            except Exception:
-                pass
+        # Cleanup active simulation and restore real GPS on close
+        api._cleanup_active_sim()
+        try:
+            from .core import clear_location, run_async
+            run_async(clear_location())
+        except Exception:
+            pass
 
     window.events.closed += on_closed
 

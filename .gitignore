@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .DS_Store
 *.egg-info/
 dist/
 build/
+*.spec.bak
+*.png
+!icon.png
