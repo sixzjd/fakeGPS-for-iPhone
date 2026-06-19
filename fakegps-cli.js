@@ -12,6 +12,7 @@ const https = require('https');
 const { spawn } = require('child_process');
 
 const GITHUB_REPO = 'sixzjd/fakeGPS-for-iPhone';
+const GITHUB_PROXY = 'https://gh-proxy.com/';
 const CACHE_DIR = path.join(os.homedir(), '.fakegps');
 const VERSION_FILE = path.join(CACHE_DIR, 'version');
 
@@ -157,7 +158,7 @@ async function ensureBinary() {
   console.log('');
 
   let lastPct = -1;
-  await httpsDownload(asset.browser_download_url, zipPath, (pct, mb, total) => {
+  await httpsDownload(GITHUB_PROXY + asset.browser_download_url, zipPath, (pct, mb, total) => {
     if (pct !== lastPct && pct % 5 === 0) {
       const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
       process.stdout.write(`\r   [${bar}] ${pct}% (${mb}/${total} MB)`);
