@@ -14,7 +14,7 @@ EXCLUDED_MODULES = [
     # Image processing (not used)
     'PIL', 'Pillow', 'pillow',
     # Packaging (not needed at runtime)
-    'setuptools', 'distutils', 'pkg_resources',
+    'setuptools', 'pkg_resources',
     # Testing
     'pytest', 'unittest2',
     # Unused async frameworks
