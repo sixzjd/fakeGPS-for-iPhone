@@ -12,6 +12,7 @@ const https = require('https');
 const { spawn } = require('child_process');
 
 const GITHUB_REPO = 'sixzjd/fakeGPS-for-iPhone';
+const R2_CDN = 'https://pub-6ba76a8ad6144022816bc12a211986f4.r2.dev/latest/';
 const GITHUB_PROXY = 'https://gh-proxy.com/';
 const CACHE_DIR = path.join(os.homedir(), '.fakegps');
 const VERSION_FILE = path.join(CACHE_DIR, 'version');
@@ -158,13 +159,27 @@ async function ensureBinary() {
   console.log('');
 
   let lastPct = -1;
-  await httpsDownload(GITHUB_PROXY + asset.browser_download_url, zipPath, (pct, mb, total) => {
-    if (pct !== lastPct && pct % 5 === 0) {
-      const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
-      process.stdout.write(`\r   [${bar}] ${pct}% (${mb}/${total} MB)`);
-      lastPct = pct;
-    }
-  });
+  const r2Url = R2_CDN + config.zipName;
+  const fallbackUrl = GITHUB_PROXY + asset.browser_download_url;
+  try {
+    await httpsDownload(r2Url, zipPath, (pct, mb, total) => {
+      if (pct !== lastPct && pct % 5 === 0) {
+        const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+        process.stdout.write(`\r   [${bar}] ${pct}% (${mb}/${total} MB)`);
+        lastPct = pct;
+      }
+    });
+  } catch (e) {
+    console.log('\n   ⚠ CDN failed, trying mirror...');
+    lastPct = -1;
+    await httpsDownload(fallbackUrl, zipPath, (pct, mb, total) => {
+      if (pct !== lastPct && pct % 5 === 0) {
+        const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+        process.stdout.write(`\r   [${bar}] ${pct}% (${mb}/${total} MB)`);
+        lastPct = pct;
+      }
+    });
+  }
   console.log('\n');
 
   // Extract
