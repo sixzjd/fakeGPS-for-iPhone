@@ -604,6 +604,127 @@ input[readonly] {
   font-size: 12px !important;
   margin: 10px 14px !important;
 }
+
+/* ── Active Location Badge ── */
+.location-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(0, 230, 118, 0.12);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--success);
+  box-shadow: 0 4px 20px rgba(0, 230, 118, 0.15);
+  animation: fadeIn 0.3s ease-out;
+}
+.location-badge.visible { display: flex; }
+.location-badge .pulse-ring {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  position: relative;
+  flex-shrink: 0;
+}
+.location-badge .pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--success);
+  animation: ring-pulse 2s ease-out infinite;
+}
+@keyframes ring-pulse {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.location-badge .coords {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* ── Search result keyboard nav ── */
+.search-item.active {
+  background: var(--cyan-dim);
+  border-left: 2px solid var(--cyan);
+}
+
+/* ── GPX progress bar ── */
+.gpx-progress {
+  display: none;
+  margin-top: 8px;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.gpx-progress.visible { display: block; }
+.gpx-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--success));
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+/* ── Improved map info when location active ── */
+.map-info.active {
+  border-color: rgba(0, 230, 118, 0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(0,230,118,0.08);
+}
+
+/* ── Coordinate format toggle ── */
+.coords-format {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.coords-format.visible { display: flex; }
+.coords-format label {
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.2s;
+  font-family: var(--font-mono);
+}
+.coords-format label:hover { border-color: rgba(255,255,255,0.2); }
+.coords-format label.selected {
+  background: var(--cyan-dim);
+  border-color: rgba(0,212,255,0.3);
+  color: var(--cyan);
+}
+
+/* ── Drag-to-search hint ── */
+.map-hint-overlay {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  padding: 8px 16px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.map-hint-overlay.show { opacity: 1; }
+
 </style>
 </head>
 <body>
@@ -612,6 +733,12 @@ input[readonly] {
   <!-- ── Map Area ── -->
   <div class="map-container">
     <div id="map"></div>
+
+    <!-- Active Location Badge -->
+    <div class="location-badge" id="locationBadge">
+      <span class="pulse-ring"></span>
+      <span class="coords" id="badgeCoords"></span>
+    </div>
 
     <!-- Search -->
     <div class="search-overlay animate-in" style="animation-delay: 0.1s">
@@ -626,6 +753,12 @@ input[readonly] {
     <div class="map-info animate-in" style="animation-delay: 0.2s">
       <div class="coords-display" id="coordsDisplay">Click map to select</div>
       <div class="coords-hint" id="coordsHint">Tap anywhere on the map to pick a location</div>
+
+      <div class="coords-format" id="coordsFormat">
+        <span>Format:</span>
+        <label class="selected" data-fmt="decimal" onclick="setCoordFormat('decimal')">Decimal</label>
+        <label data-fmt="dms" onclick="setCoordFormat('dms')">DMS</label>
+      </div>
       <div class="action-row" id="actionBtns" style="display:none">
         <button class="btn btn-primary" onclick="applyLocation()">Set Location</button>
         <button class="btn btn-ghost" onclick="copyCoords()">Copy</button>
@@ -649,7 +782,7 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.0.1</div>
+        <div class="app-version">v6.1.0</div>
       </div>
     </div>
 
@@ -737,6 +870,10 @@ input[readonly] {
             </svg>
             Play GPX
           </button>
+
+          <div class="gpx-progress" id="gpxProgress">
+            <div class="gpx-progress-bar" id="gpxProgressBar"></div>
+          </div>
         </div>
       </div>
 
@@ -754,9 +891,64 @@ input[readonly] {
 <script>
 // ── State ──
 var selectedLat = null, selectedLng = null, marker = null;
+var _locationActive = false;
+var _coordFormat = 'decimal';
+var _searchResults = [];
+var _activeSearchIdx = -1;
 var _lastSetTitle = '';
 var AMAP_KEY = '';
 var _searchTimer = null;
+
+
+// ── Decimal to DMS conversion ──
+function decimalToDMS(lat, lng) {
+  function toDMS(val, isLat) {
+    var dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+    val = Math.abs(val);
+    var d = Math.floor(val);
+    var m = Math.floor((val - d) * 60);
+    var s = ((val - d) * 60 - m) * 60;
+    return d + '\u00b0' + String(m).padStart(2,'0') + '\'' + s.toFixed(1) + '"' + dir;
+  }
+  return toDMS(lat, true) + ' ' + toDMS(lng, false);
+}
+
+function setCoordFormat(fmt) {
+  _coordFormat = fmt;
+  document.querySelectorAll('#coordsFormat label').forEach(function(el) {
+    el.classList.toggle('selected', el.dataset.fmt === fmt);
+  });
+  updateCoordsDisplay();
+}
+
+function updateCoordsDisplay() {
+  if (selectedLat === null) return;
+  var el = document.getElementById('coordsDisplay');
+  if (_coordFormat === 'dms') {
+    el.textContent = decimalToDMS(selectedLat, selectedLng);
+  } else {
+    el.textContent = selectedLat + ', ' + selectedLng;
+  }
+}
+
+function showLocationActive(lat, lng) {
+  _locationActive = true;
+  var badge = document.getElementById('locationBadge');
+  var badgeCoords = document.getElementById('badgeCoords');
+  badge.classList.add('visible');
+  badgeCoords.textContent = lat + ', ' + lng;
+  document.getElementById('map-info') && document.querySelector('.map-info').classList.add('active');
+  document.getElementById('coordsFormat').classList.add('visible');
+  document.getElementById('coordsHint').textContent = 'Location active';
+}
+
+function hideLocationActive() {
+  _locationActive = false;
+  document.getElementById('locationBadge').classList.remove('visible');
+  var mapInfo = document.querySelector('.map-info');
+  if (mapInfo) mapInfo.classList.remove('active');
+  document.getElementById('coordsFormat').classList.remove('visible');
+}
 
 // ── Map Init ──
 var map = L.map('map', {
@@ -793,9 +985,10 @@ function gcj02ToWgs84(lat, lng) {
 function selectPoint(lat, lng) {
   var result = gcj02ToWgs84(lat, lng);
   selectedLat = result[0]; selectedLng = result[1];
-  document.getElementById('coordsDisplay').textContent = selectedLat + ', ' + selectedLng;
+  updateCoordsDisplay();
   document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
   document.getElementById('actionBtns').style.display = 'flex';
+  document.getElementById('coordsFormat').classList.add('visible');
   // Notify Python
   var title = 'SELECT:' + selectedLat + ',' + selectedLng;
   if (document.title !== title) document.title = title;
@@ -817,6 +1010,7 @@ function applyLocation() {
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_location(selectedLat, selectedLng);
   }
+  showLocationActive(selectedLat, selectedLng);
 }
 
 function copyCoords() {
@@ -838,6 +1032,7 @@ function copyCoords() {
 function restoreLocation() {
   document.title = 'CLEAR:now';
   document.getElementById('coordsHint').textContent = 'Restoring real location...';
+  hideLocationActive();
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.clear_location();
   }
@@ -848,7 +1043,8 @@ function doSearch() {
   var val = document.getElementById('searchInput').value.trim();
   if (!val) { hideDropdown(); return; }
   // Direct coordinate input
-  var coordMatch = val.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+  var coordMatch = val.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/)
+    || val.match(/^(\d+\.\d+)[,\s]+(\d+\.\d+)$/);
   if (coordMatch) {
     var lat = parseFloat(coordMatch[1]), lng = parseFloat(coordMatch[2]);
     map.setView([lat, lng], 15);
@@ -913,6 +1109,7 @@ function showDropdown(results) {
     dd.appendChild(item);
   });
   dd.style.display = 'block';
+  _activeSearchIdx = -1;
 }
 
 function hideDropdown() {
@@ -929,6 +1126,35 @@ document.getElementById('searchInput').addEventListener('input', function() {
   _searchTimer = setTimeout(doSearch, 400);
 });
 document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  var dd = document.getElementById('searchDropdown');
+  var items = dd.querySelectorAll('.search-item');
+  if (dd.style.display === 'block' && items.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _activeSearchIdx = Math.min(_activeSearchIdx + 1, items.length - 1);
+      items.forEach(function(el, i) { el.classList.toggle('active', i === _activeSearchIdx); });
+      items[_activeSearchIdx].scrollIntoView({block: 'nearest'});
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _activeSearchIdx = Math.max(_activeSearchIdx - 1, 0);
+      items.forEach(function(el, i) { el.classList.toggle('active', i === _activeSearchIdx); });
+      items[_activeSearchIdx].scrollIntoView({block: 'nearest'});
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (_activeSearchIdx >= 0 && items[_activeSearchIdx]) {
+        items[_activeSearchIdx].click();
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      hideDropdown();
+      return;
+    }
+  }
   if (e.key === 'Enter') doSearch();
 });
 
@@ -937,7 +1163,7 @@ function showToast(msg, type) {
   var t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + (type || 'info');
-  setTimeout(function(){ t.className = 'toast'; }, 2500);
+  setTimeout(function(){ t.className = 'toast'; }, 3000);
 }
 
 // ── Quick Places ──
@@ -974,6 +1200,7 @@ var BUILTIN_PLACES = [
       if (window.pywebview && window.pywebview.api) {
         window.pywebview.api.set_location(p.lat, p.lng);
       }
+      showLocationActive(p.lat, p.lng);
     };
     grid.appendChild(btn);
   });
@@ -1007,7 +1234,16 @@ function playGpx() {
   var path = document.getElementById('gpxPath').value;
   if (!path) { showToast('Please select a GPX file first', 'error'); return; }
   document.getElementById('playGpxBtn').disabled = true;
-  document.getElementById('playGpxBtn').textContent = 'Playing...';
+  document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop';
+  document.getElementById('gpxProgress').classList.add('visible');
+  document.getElementById('gpxProgressBar').style.width = '0%';
+  // Simulate progress (real progress not available from pymobiledevice3)
+  var _gpxTimer = setInterval(function() {
+    var bar = document.getElementById('gpxProgressBar');
+    var w = parseFloat(bar.style.width) || 0;
+    if (w < 90) bar.style.width = (w + 2) + '%';
+  }, 500);
+  window._gpxTimer = _gpxTimer;
   logMsg('Playing GPX: ' + path);
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.play_gpx(path);
@@ -1015,9 +1251,15 @@ function playGpx() {
 }
 
 function gpxFinished() {
+  if (window._gpxTimer) { clearInterval(window._gpxTimer); window._gpxTimer = null; }
   document.getElementById('playGpxBtn').disabled = false;
   document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play GPX';
-  logMsg('GPX playback finished.');
+  document.getElementById('gpxProgressBar').style.width = '100%';
+  setTimeout(function() {
+    document.getElementById('gpxProgress').classList.remove('visible');
+    document.getElementById('gpxProgressBar').style.width = '0%';
+  }, 1000);
+  logMsg('GPX playback finished.', 'success');
 }
 
 // ── AMap Key ──

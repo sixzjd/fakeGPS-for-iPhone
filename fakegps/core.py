@@ -19,6 +19,9 @@ class DeviceInfo:
     ios_version: str
 
 
+# ── Internal Helpers ──
+
+
 async def _get_lockdown(serial=None):
     from pymobiledevice3.lockdown import create_using_usbmux
     return await create_using_usbmux(serial=serial)
@@ -26,7 +29,9 @@ async def _get_lockdown(serial=None):
 
 async def _get_lockdown_via_tunneld(udid=None):
     """Get lockdown client via tunneld (required for iOS 17+ DVT services)."""
-    from pymobiledevice3.tunneld.api import get_tunneld_devices, get_tunneld_device_by_udid, TUNNELD_DEFAULT_ADDRESS
+    from pymobiledevice3.tunneld.api import (
+        get_tunneld_devices, get_tunneld_device_by_udid, TUNNELD_DEFAULT_ADDRESS
+    )
     if udid:
         rsd = await get_tunneld_device_by_udid(udid, TUNNELD_DEFAULT_ADDRESS)
     else:
@@ -35,6 +40,87 @@ async def _get_lockdown_via_tunneld(udid=None):
             raise ConnectionError("No devices found via tunneld. Make sure tunneld is running.")
         rsd = devices[0]
     return rsd
+
+
+async def _query_device_info(lockdown):
+    """Extract (version, udid) from a lockdown client with multiple fallbacks."""
+    version = "0"
+    udid = None
+    try:
+        info = lockdown.short_info or {}
+        version = info.get("ProductVersion") or ""
+        udid = info.get("UniqueDeviceID") or lockdown.udid
+    except Exception:
+        pass
+    if not version or version == "0":
+        try:
+            version = lockdown.product_version or "0"
+        except Exception:
+            pass
+    if not udid:
+        udid = lockdown.udid
+    return version, udid
+
+
+def _ios_major(version_str):
+    try:
+        return int(version_str.split(".")[0])
+    except (ValueError, IndexError):
+        return 0
+
+
+async def _get_device_session_context(serial=None):
+    """Unified device info: query version/udid, return (major, udid).
+
+    Eliminates the duplicated lockdown-query-close pattern that was
+    repeated in set_location, clear_location, and play_gpx_file.
+    """
+    lockdown = await _get_lockdown(serial=serial)
+    try:
+        version, udid = await _query_device_info(lockdown)
+    finally:
+        await lockdown.close()
+    return _ios_major(version), udid
+
+
+async def _open_dvt_session(udid):
+    """Open DvtProvider + LocationSimulation for iOS 17+.
+
+    Returns (provider, loc_sim) - caller must _close_dvt_session when done.
+    """
+    from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+    from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+
+    rsd = await _get_lockdown_via_tunneld(udid)
+    provider = DvtProvider(rsd)
+    await provider.__aenter__()
+    try:
+        loc_sim = LocationSimulation(provider)
+        await loc_sim.__aenter__()
+    except Exception:
+        try:
+            await provider.__aexit__(None, None, None)
+        except Exception:
+            pass
+        raise
+    return provider, loc_sim
+
+
+async def _close_dvt_session(provider, loc_sim):
+    """Safely close a DVT session (best-effort cleanup)."""
+    if loc_sim:
+        try:
+            await loc_sim.__aexit__(None, None, None)
+        except Exception:
+            pass
+    if provider:
+        try:
+            await provider.__aexit__(None, None, None)
+        except Exception:
+            pass
+
+
+# ── Public API ──
 
 
 async def list_connected_devices():
@@ -48,19 +134,17 @@ async def list_connected_devices():
         udid = dev.serial
         try:
             lockdown = await _get_lockdown(serial=dev.serial)
-            # short_info reads from all_values (populated during init)
             info = lockdown.short_info or {}
             name = info.get("DeviceName") or ""
             ios_version = info.get("ProductVersion") or ""
             udid = info.get("UniqueDeviceID") or dev.serial
-            # Fallback: fresh query via get_value (async, queries device directly)
+            # Fallback: fresh query via get_value
             if not name or not ios_version:
                 try:
                     name = name or await lockdown.get_value("DeviceName") or ""
                     ios_version = ios_version or await lockdown.get_value("ProductVersion") or ""
                 except Exception:
                     pass
-            # Final fallbacks
             if not name:
                 try:
                     name = lockdown.product_type or ""
@@ -71,158 +155,76 @@ async def list_connected_devices():
             if not ios_version:
                 ios_version = "Unknown"
             await lockdown.close()
-        except Exception as e:
+        except Exception:
             name = name or f"Device ({dev.serial[:8]}...)"
             ios_version = ios_version or "Unknown"
         result.append(DeviceInfo(udid=udid, name=name, ios_version=ios_version))
     return result
 
 
-def _ios_major(version_str):
-    try:
-        return int(version_str.split(".")[0])
-    except (ValueError, IndexError):
-        return 0
-
-
 async def set_location(latitude, longitude, serial=None):
-    """Set simulated GPS location on connected iPhone."""
+    """Set simulated GPS location on connected iPhone.
+
+    Returns a session dict that must be kept alive for the spoof to persist.
+    For iOS 17+: {"provider", "sim", "ios_major"}
+    For iOS <17:  {"lockdown", "sim", "ios_major"}
+    """
     latitude = float(latitude)
     longitude = float(longitude)
-    lockdown = await _get_lockdown(serial=serial)
-    try:
-        # Get iOS version with multiple fallbacks
-        version = "0"
-        udid = None
-        try:
-            info = lockdown.short_info or {}
-            version = info.get("ProductVersion") or ""
-            udid = info.get("UniqueDeviceID") or lockdown.udid
-        except Exception:
-            pass
-        if not version or version == "0":
-            try:
-                version = lockdown.product_version or "0"
-            except Exception:
-                pass
-        if not udid:
-            udid = lockdown.udid
-        major = _ios_major(version)
-        await lockdown.close()
+    major, udid = await _get_device_session_context(serial)
 
-        if major >= 17:
-            # iOS 17+ requires tunneld for DVT services
-            rsd = await _get_lockdown_via_tunneld(udid)
-            from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
-            from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            provider = DvtProvider(rsd)
-            await provider.__aenter__()
-            loc_sim = LocationSimulation(provider)
-            try:
-                await loc_sim.__aenter__()
-                await loc_sim.set(latitude, longitude)
-            except Exception:
-                try:
-                    await loc_sim.__aexit__(None, None, None)
-                except Exception:
-                    pass
-                try:
-                    await provider.__aexit__(None, None, None)
-                except Exception:
-                    pass
-                raise
-            return {"rsd": rsd, "provider": provider, "sim": loc_sim, "ios_major": major}
-        else:
-            # iOS < 17: use DtSimulateLocation directly
-            lockdown2 = await _get_lockdown(serial=serial)
-            from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown2)
-            await sim.set(latitude, longitude)
-            return {"lockdown": lockdown2, "sim": sim, "ios_major": major}
-    except Exception:
+    if major >= 17:
+        provider, loc_sim = await _open_dvt_session(udid)
         try:
-            await lockdown.close()
+            await loc_sim.set(latitude, longitude)
         except Exception:
-            pass
-        raise
+            await _close_dvt_session(provider, loc_sim)
+            raise
+        return {"provider": provider, "sim": loc_sim, "ios_major": major}
+    else:
+        lockdown = await _get_lockdown(serial=serial)
+        from pymobiledevice3.services.simulate_location import DtSimulateLocation
+        sim = DtSimulateLocation(lockdown)
+        await sim.set(latitude, longitude)
+        return {"lockdown": lockdown, "sim": sim, "ios_major": major}
 
 
 async def clear_location(serial=None):
     """Clear simulated location (restore real GPS)."""
-    lockdown = await _get_lockdown(serial=serial)
-    try:
-        version = "0"
-        udid = None
-        try:
-            info = lockdown.short_info or {}
-            version = info.get("ProductVersion") or ""
-            udid = info.get("UniqueDeviceID") or lockdown.udid
-        except Exception:
-            pass
-        if not version or version == "0":
-            try:
-                version = lockdown.product_version or "0"
-            except Exception:
-                pass
-        if not udid:
-            udid = lockdown.udid
-        major = _ios_major(version)
-        await lockdown.close()
+    major, udid = await _get_device_session_context(serial)
 
-        if major >= 17:
-            rsd = await _get_lockdown_via_tunneld(udid)
-            from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
-            from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            async with DvtProvider(rsd) as provider:
-                async with LocationSimulation(provider) as loc_sim:
-                    await loc_sim.clear()
-        else:
-            lockdown2 = await _get_lockdown(serial=serial)
-            from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown2)
-            await sim.clear()
-            await lockdown2.close()
-    except Exception:
-        raise
+    if major >= 17:
+        rsd = await _get_lockdown_via_tunneld(udid)
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+        from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+        async with DvtProvider(rsd) as provider:
+            async with LocationSimulation(provider) as loc_sim:
+                await loc_sim.clear()
+    else:
+        lockdown = await _get_lockdown(serial=serial)
+        from pymobiledevice3.services.simulate_location import DtSimulateLocation
+        sim = DtSimulateLocation(lockdown)
+        await sim.clear()
+        await lockdown.close()
 
 
 async def play_gpx_file(filepath, serial=None):
     """Play a GPX file trajectory on the device."""
-    lockdown = await _get_lockdown(serial=serial)
-    try:
-        version = "0"
-        udid = None
-        try:
-            info = lockdown.short_info or {}
-            version = info.get("ProductVersion") or ""
-            udid = info.get("UniqueDeviceID") or lockdown.udid
-        except Exception:
-            pass
-        if not version or version == "0":
-            try:
-                version = lockdown.product_version or "0"
-            except Exception:
-                pass
-        if not udid:
-            udid = lockdown.udid
-        major = _ios_major(version)
-        await lockdown.close()
+    major, udid = await _get_device_session_context(serial)
 
-        if major >= 17:
-            rsd = await _get_lockdown_via_tunneld(udid)
-            from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
-            from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-            async with DvtProvider(rsd) as provider:
-                async with LocationSimulation(provider) as loc_sim:
-                    await loc_sim.play_gpx_file(filepath)
-        else:
-            lockdown2 = await _get_lockdown(serial=serial)
-            from pymobiledevice3.services.simulate_location import DtSimulateLocation
-            sim = DtSimulateLocation(lockdown2)
-            await sim.play_gpx_file(filepath)
-            await lockdown2.close()
-    except Exception:
-        raise
+    if major >= 17:
+        rsd = await _get_lockdown_via_tunneld(udid)
+        from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+        from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+        async with DvtProvider(rsd) as provider:
+            async with LocationSimulation(provider) as loc_sim:
+                await loc_sim.play_gpx_file(filepath)
+    else:
+        lockdown = await _get_lockdown(serial=serial)
+        from pymobiledevice3.services.simulate_location import DtSimulateLocation
+        sim = DtSimulateLocation(lockdown)
+        await sim.play_gpx_file(filepath)
+        await lockdown.close()
 
 
 def check_tunneld_running():
@@ -267,12 +269,14 @@ def run_async(coro):
 
     if running and running.is_running():
         future = concurrent.futures.Future()
+
         async def _wrapper():
             try:
                 result = await coro
                 future.set_result(result)
             except Exception as e:
                 future.set_exception(e)
+
         running.create_task(_wrapper())
         return future.result()
     else:

@@ -1,7 +1,7 @@
 {
   "name": "fakegps",
-  "version": "6.0.6",
-  "description": "FakeGPS - Cross-platform iPhone virtual GPS location tool via USB. Set fake GPS location on iPhone without jailbreak or Xcode. Supports macOS and Windows.",
+  "version": "6.1.0",
+  "description": "FakeGPS - Cross-platform iPhone virtual GPS location tool (虚拟定位). Set fake GPS on iPhone via USB without jailbreak or Xcode. macOS + Windows.",
   "main": "fakegps-cli.js",
   "bin": {
     "fakegps": "fakegps-cli.js"
@@ -15,14 +15,20 @@
     "location",
     "iphone",
     "ios",
-    "virtual",
-    "mock",
-    "spoof",
+    "virtual-location",
+    "virtual-gps",
+    "mock-location",
+    "spoof-gps",
+    "iphone-virtual-location",
+    "ios-gps-spoof",
+    "虚拟定位",
     "pymobiledevice3",
     "developer",
     "cross-platform",
     "gui",
-    "cli"
+    "cli",
+    "gpx",
+    "no-jailbreak"
   ],
   "author": "sixzjd",
   "license": "MIT",

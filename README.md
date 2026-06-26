@@ -1,8 +1,9 @@
-# FakeGPS v6.0.1 - iPhone 虚拟定位工具
+# FakeGPS v6.1.0 - iPhone 虚拟定位工具 | iOS GPS 模拟器
 
 跨平台（macOS + Windows）iPhone 虚拟 GPS 定位工具。免越狱、无需 Xcode，通过 USB 为 iPhone 设置虚拟定位。
 
 ![macOS](https://img.shields.io/badge/macOS-FakeGPS.app-blue?logo=apple) ![Windows](https://img.shields.io/badge/Windows-FakeGPS.exe-blue?logo=windows) ![npm](https://img.shields.io/badge/npm-fakegps-red?logo=npm) ![License](https://img.shields.io/badge/license-MIT-green)
+> **关键词**：iPhone 虚拟定位、iOS GPS 模拟器、免越狱改定位、fakegps、虚拟定位工具、macOS 虚拟定位、Windows 虚拟定位、GPX 轨迹模拟
 
 ## 功能特性
 
@@ -151,22 +152,24 @@ macOS 产出 `FakeGPS.app`，Windows 产出 `FakeGPS/` 文件夹。
 
 GitHub Actions 会在每次 Release 时自动构建 macOS + Windows 双平台产物并上传。
 
+
 ## 常见问题
 
-**Q: 提示 "No device found"**
-A: 检查数据线是否支持数据传输，iPhone 上是否点了"信任此电脑"。
+### fakeGPS 是什么？
+fakeGPS 是一款跨平台（macOS + Windows）iPhone 虚拟定位工具，可以通过 USB 将 iPhone 的 GPS 定位修改到世界上任意位置。免越狱、无需 Xcode，支持 GUI 地图交互和 CLI 命令行两种模式。
 
-**Q: 提示 "tunneld not running"（iOS 17+）**
-A: 在单独终端启动：`sudo python3 -m pymobiledevice3 remote tunneld`
+### 使用 fakeGPS 需要越狱吗？
+完全不需要。fakeGPS 基于 pymobiledevice3 协议与 iPhone 通信，不需要在 iPhone 上安装任何 App 或进行越狱操作。
 
-**Q: 设备名称显示 "Unknown"**
-A: 某些设备在首次连接时可能未完全配对，尝试先运行一次 `ideviceinfo` 或重新插拔数据线。
+### fakeGPS 支持哪些 iOS 版本？
+支持 iOS 16 及以上版本。iOS 17+ 需要额外运行 tunneld 隧道服务（GUI 内有提示）。
 
-**Q: 拔掉数据线后定位恢复了**
-A: 正常行为，虚拟定位需要保持 USB 连接。
+### 如何安装 fakeGPS？
+推荐从 [GitHub Releases](https://github.com/sixzjd/fakeGPS-for-iPhone/releases/latest) 下载可执行文件，解压即用。也支持 npm（`npm install -g fakegps`）、pip（`pip install fakegps`）和源码运行。
 
-**Q: Windows SmartScreen 弹窗**
-A: 这是 Windows 对未签名应用的正常提醒，点击"更多信息" → "仍要运行"。
+### 支持哪些城市的地标？
+内置天安门、国贸CBD、望京SOHO、上海外滩、深圳市民中心、巴黎埃菲尔铁塔、纽约时代广场、东京塔、伦敦大本钟等 9 个全球地标，还支持自定义添加。
+
 
 ## 免责声明
 

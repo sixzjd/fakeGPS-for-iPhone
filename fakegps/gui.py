@@ -249,7 +249,7 @@ def main():
     html_content = html_path.read_text(encoding="utf-8")
 
     window = webview.create_window(
-        title="FakeGPS v6.0.1",
+        title="FakeGPS v6.1.0",
         html=html_content,
         js_api=api,
         width=1280,
