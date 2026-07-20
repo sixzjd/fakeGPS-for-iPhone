@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>FakeGPS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='white'/%3E%3Cpath d='M32 12c-11 0-19 8-19 18 0 14 19 23 19 23s19-9 19-23c0-10-8-18-19-18Zm0 25a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z' fill='black'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -235,25 +236,26 @@ html, body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--cyan), #0099cc);
-  color: var(--bg-deep);
+  background: #fff;
+  color: #111;
+  border: 1px solid #fff;
 }
 .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
 
 .btn-ghost {
-  background: rgba(255,255,255,0.06);
-  color: var(--text);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #fff;
+  color: #111;
+  border: 1px solid #fff;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+.btn-ghost:hover { background: #e5e5e5; border-color: #e5e5e5; }
 
 .btn-danger {
-  background: rgba(255,71,87,0.15);
-  color: var(--danger);
-  border: 1px solid rgba(255,71,87,0.2);
+  background: #fff;
+  color: #111;
+  border: 1px solid #fff;
 }
-.btn-danger:hover { background: rgba(255,71,87,0.25); border-color: rgba(255,71,87,0.4); }
+.btn-danger:hover { background: #e5e5e5; border-color: #e5e5e5; }
 
 /* ── Toast ── */
 .toast {
@@ -833,21 +835,6 @@ input[readonly] {
         </div>
       </div>
 
-      <!-- Tunneld -->
-      <div class="section animate-in" style="animation-delay: 0.25s">
-        <div class="section-label">Tunneld (iOS 17+)</div>
-        <div class="card">
-          <div class="input-row">
-            <input type="text" class="mono-input" id="tunneldCmd" value="sudo python3 -m pymobiledevice3 remote tunneld" readonly />
-            <button class="btn-icon" onclick="copyTunneld()" title="Copy command" id="copyBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Quick Places -->
       <div class="section animate-in" style="animation-delay: 0.3s">
         <div class="section-label">Quick Places</div>
@@ -939,6 +926,7 @@ function showLocationActive(lat, lng) {
   badgeCoords.textContent = lat + ', ' + lng;
   document.getElementById('map-info') && document.querySelector('.map-info').classList.add('active');
   document.getElementById('coordsFormat').classList.add('visible');
+  map.setView([lat, lng], Math.max(map.getZoom(), 15), {animate: true});
   document.getElementById('coordsHint').textContent = 'Location active';
 }
 
