@@ -13,6 +13,7 @@ import os
 import sys
 import shutil
 import time
+import shlex
 from dataclasses import dataclass
 
 
@@ -193,7 +194,19 @@ def ensure_tunneld():
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
     elif os.geteuid() != 0:
-        command.insert(0, "sudo")
+        # Use the native macOS administrator prompt.  A GUI app has no useful
+        # stdin, so `sudo` alone would silently fail with the old approach.
+        shell_command = "nohup " + " ".join(shlex.quote(arg) for arg in command) + " >/dev/null 2>&1 &"
+        try:
+            apple_script = 'do shell script "' + shell_command.replace('"', '\\"') + '" with administrator privileges'
+            subprocess.run(
+                ["osascript", "-e", apple_script],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            time.sleep(1.2)
+            return check_tunneld_running()
+        except (OSError, subprocess.SubprocessError):
+            return False
     try:
         _tunneld_process = subprocess.Popen(command, **kwargs)
         time.sleep(0.8)
