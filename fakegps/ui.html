@@ -687,7 +687,8 @@ input[readonly] {
   display: none;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 2px;
+  margin-bottom: 4px;
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -952,9 +953,9 @@ L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scal
 // Custom marker icon
 var markerIcon = L.divIcon({
   className: '',
-  html: '<div style="width:20px;height:20px;background:var(--cyan);border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(0,212,255,0.6),0 2px 8px rgba(0,0,0,0.4)"></div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10]
+  html: '<div style="width:34px;height:42px;position:relative;filter:drop-shadow(0 2px 4px rgba(0,0,0,.65))"><svg width="34" height="42" viewBox="0 0 34 42" xmlns="http://www.w3.org/2000/svg"><path d="M17 1C8.2 1 1 8.2 1 17c0 12 16 24 16 24s16-12 16-24C33 8.2 25.8 1 17 1Z" fill="white" stroke="#111" stroke-width="2"/><circle cx="17" cy="17" r="6" fill="white" stroke="#111" stroke-width="2"/></svg></div>',
+  iconSize: [34, 42],
+  iconAnchor: [17, 42]
 });
 
 // ── GCJ-02 -> WGS-84 ──

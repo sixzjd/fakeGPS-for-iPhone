@@ -37,14 +37,19 @@ async def _get_lockdown_via_tunneld(udid=None):
     from pymobiledevice3.tunneld.api import (
         get_tunneld_devices, get_tunneld_device_by_udid, TUNNELD_DEFAULT_ADDRESS
     )
-    if udid:
-        rsd = await get_tunneld_device_by_udid(udid, TUNNELD_DEFAULT_ADDRESS)
-    else:
-        devices = await get_tunneld_devices(TUNNELD_DEFAULT_ADDRESS)
-        if not devices:
-            raise ConnectionError("No devices found via tunneld. Make sure tunneld is running.")
-        rsd = devices[0]
-    return rsd
+    last_error = None
+    for _ in range(6):
+        try:
+            if udid:
+                return await get_tunneld_device_by_udid(udid, TUNNELD_DEFAULT_ADDRESS)
+            devices = await get_tunneld_devices(TUNNELD_DEFAULT_ADDRESS)
+            if devices:
+                return devices[0]
+            last_error = ConnectionError("No devices found via tunneld")
+        except Exception as exc:
+            last_error = exc
+        await asyncio.sleep(1.0)
+    raise ConnectionError("tunneld started but the device channel was not ready") from last_error
 
 
 async def _query_device_info(lockdown):
@@ -203,14 +208,20 @@ def ensure_tunneld():
                 ["osascript", "-e", apple_script],
                 capture_output=True, text=True, timeout=30, check=False,
             )
-            time.sleep(1.2)
-            return check_tunneld_running()
+            for _ in range(10):
+                if check_tunneld_running():
+                    return True
+                time.sleep(1)
+            return False
         except (OSError, subprocess.SubprocessError):
             return False
     try:
         _tunneld_process = subprocess.Popen(command, **kwargs)
-        time.sleep(0.8)
-        return check_tunneld_running()
+        for _ in range(10):
+            if check_tunneld_running():
+                return True
+            time.sleep(1)
+        return False
     except OSError:
         return False
 
