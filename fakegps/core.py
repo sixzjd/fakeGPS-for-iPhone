@@ -193,7 +193,7 @@ def ensure_tunneld():
     global _tunneld_process
     if check_tunneld_running():
         return False
-    command = [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld"]
+    command = [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld", "--daemonize"]
     kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
               "stdin": subprocess.DEVNULL, "start_new_session": True}
     if os.name == "nt":
@@ -201,7 +201,7 @@ def ensure_tunneld():
     elif os.geteuid() != 0:
         # Use the native macOS administrator prompt.  A GUI app has no useful
         # stdin, so `sudo` alone would silently fail with the old approach.
-        shell_command = "nohup " + " ".join(shlex.quote(arg) for arg in command) + " >/dev/null 2>&1 &"
+        shell_command = " ".join(shlex.quote(arg) for arg in command)
         try:
             apple_script = 'do shell script "' + shell_command.replace('"', '\\"') + '" with administrator privileges'
             subprocess.run(
