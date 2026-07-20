@@ -107,7 +107,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.0',
+            'CFBundleShortVersionString': '6.2.1',
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

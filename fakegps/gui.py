@@ -6,7 +6,9 @@ instead of bundling Chromium (~200MB savings).
 """
 
 import sys
+import os
 import json
+import time
 import threading
 from pathlib import Path
 
@@ -16,6 +18,28 @@ def _resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS) / 'fakegps' / relative_path
     return Path(__file__).parent / relative_path
+
+
+def app_log_path():
+    """Persistent log file for full tracebacks (sidebar only shows one line)."""
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "FakeGPS.log")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Logs/FakeGPS.log")
+    return os.path.expanduser("~/.fakegps.log")
+
+
+def _dump_traceback(context):
+    """Append the current traceback to app_log_path() for post-mortem."""
+    try:
+        import traceback as _tb
+        with open(app_log_path(), "a", encoding="utf-8") as fh:
+            fh.write(f"--- {context} @ {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            fh.write(_tb.format_exc())
+            fh.write("\n")
+    except Exception:
+        pass
 
 
 _CONFIG_FILE = Path.home() / ".fakegps_config.json"
@@ -119,14 +143,17 @@ class API:
                 ios_major = result.get("ios_major", "?")
                 self._js(f"logMsg('Location set to ({lat}, {lng}) [iOS {ios_major}]', 'success')")
                 self._js("showToast('Location set!', 'success')")
-                self._js("document.getElementById('coordsHint').textContent = 'Location active'")
+                self._js(f"showLocationActive({lat}, {lng})")
             except Exception as e:
+                _dump_traceback("set_location")
                 err = str(e).replace("'", "\\'").replace("\n", " ")
                 self._js(f"logMsg('Set location error: {err}', 'error')")
                 self._js(f"showToast('Failed: {err}', 'error')")
+                self._js("locationFailed()")
+                self._js(f"logMsg('Full traceback saved to {app_log_path()}', 'warn')")
                 # Check tunneld only after failure, as a hint
                 if not check_tunneld_running():
-                    self._js("logMsg('tunneld could not start automatically. Approve the password prompt and retry.', 'warn')")
+                    self._js("logMsg('tunneld could not start automatically. Approve the password/UAC prompt and retry.', 'warn')")
                 else:
                     self._js("logMsg('tunneld is running. Check device connection and try again.', 'warn')")
 
@@ -147,6 +174,7 @@ class API:
                 self._js("showToast('Real location restored', 'success')")
                 self._js("document.getElementById('coordsHint').textContent = 'Real location active'")
             except Exception as e:
+                _dump_traceback("clear_location")
                 err = str(e).replace("'", "\\'")
                 self._js(f"logMsg('Error: {err}', 'error')")
 
@@ -184,6 +212,7 @@ class API:
                 self._js("gpxFinished()")
                 self._js("logMsg('GPX playback finished.', 'success')")
             except Exception as e:
+                _dump_traceback("play_gpx")
                 err = str(e).replace("'", "\\'")
                 self._js(f"logMsg('GPX error: {err}', 'error')")
                 self._js("gpxFinished()")
@@ -252,7 +281,7 @@ def main():
     html_content = html_path.read_text(encoding="utf-8")
 
     window = webview.create_window(
-        title="FakeGPS v6.2.0",
+        title="FakeGPS v6.2.1",
         html=html_content,
         js_api=api,
         width=1280,

@@ -187,36 +187,176 @@ def list_android_devices():
 
 
 _tunneld_process = None
+_tunneld_error = ""
+
+TUNNELD_HOST = "127.0.0.1"
+TUNNELD_PORT = 49151
+
+
+def _is_frozen():
+    """True when running from a PyInstaller bundle."""
+    return getattr(sys, "frozen", False)
+
+
+def _tunneld_log_path():
+    """Where tunneld stdout/stderr is kept for post-mortem debugging."""
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "FakeGPS-tunneld.log")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Logs/FakeGPS-tunneld.log")
+    return os.path.expanduser("~/.fakegps-tunneld.log")
+
+
+def _tunneld_command():
+    """Command line that starts the pymobiledevice3 tunneld server.
+
+    Inside a frozen bundle ``sys.executable`` is the FakeGPS binary itself,
+    so it is re-executed with the ``--tunneld`` helper flag (handled in
+    run_gui.py).  Using ``-m pymobiledevice3`` there would launch a second
+    GUI window instead of the daemon.
+    """
+    if _is_frozen():
+        return [sys.executable, "--tunneld"]
+    return [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld"]
+
+
+def _is_elevated():
+    """True when the current process already has root/admin rights."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
+    try:
+        return os.geteuid() == 0
+    except AttributeError:
+        return True
+
+
+def _spawn_detached(command):
+    """Spawn tunneld as a detached background process (already elevated).
+
+    Output goes to _tunneld_log_path() so a failing daemon can be diagnosed.
+    """
+    global _tunneld_process
+    try:
+        log_fh = open(_tunneld_log_path(), "ab")
+    except OSError:
+        log_fh = subprocess.DEVNULL
+    kwargs = {"stdout": log_fh, "stderr": log_fh,
+              "stdin": subprocess.DEVNULL}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        _tunneld_process = subprocess.Popen(command, **kwargs)
+        return True
+    except OSError:
+        return False
+    finally:
+        if log_fh is not subprocess.DEVNULL:
+            log_fh.close()
 
 
 def ensure_tunneld():
-    """Start tunneld from the app when iOS 17+ needs it."""
-    global _tunneld_process
-    if check_tunneld_running() and _tunnel_port_ready():
+    """Make sure the pymobiledevice3 tunneld server is up (iOS 17+).
+
+    tunneld needs root/admin rights to create the tunnel interface, so when
+    the app itself is not elevated it is started with elevation:
+
+    - macOS:   native administrator password prompt (osascript)
+    - Windows: UAC elevation prompt (ShellExecuteW "runas")
+
+    Returns True once the server answers on 127.0.0.1:49151.  On failure
+    the module-level _tunneld_error explains why (shown to the user).
+    """
+    global _tunneld_error
+    _tunneld_error = ""
+
+    if _tunnel_port_ready():
         return True
-    command = [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld", "--daemonize"]
-    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-              "stdin": subprocess.DEVNULL, "start_new_session": True}
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-    try:
-        _tunneld_process = subprocess.Popen(command, **kwargs)
-        for _ in range(15):
-            if check_tunneld_running() and _tunnel_port_ready():
-                return True
-            time.sleep(0.8)
-        return False
-    except OSError:
-        return False
+
+    command = _tunneld_command()
+    log_path = _tunneld_log_path()
+
+    if _is_elevated():
+        if not _spawn_detached(command):
+            _tunneld_error = "Failed to spawn the tunneld helper process"
+            return False
+    elif sys.platform == "darwin":
+        # Native macOS administrator prompt.  nohup + & keeps the daemon
+        # alive after the privileged helper shell exits; output is kept in
+        # a log file instead of /dev/null so failures can be diagnosed.
+        shell_command = ("nohup " + " ".join(shlex.quote(arg) for arg in command)
+                         + " >>" + shlex.quote(log_path) + " 2>&1 &")
+        apple_script = 'do shell script "' + shell_command.replace('"', '\\"') + '" with administrator privileges'
+        try:
+            prompt = subprocess.run(
+                ["osascript", "-e", apple_script],
+                capture_output=True, text=True, timeout=180, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            _tunneld_error = "Could not show the administrator password prompt"
+            return False
+        if prompt.returncode != 0:
+            # User cancelled the password prompt (or osascript failed).
+            _tunneld_error = ("Administrator password prompt was cancelled — "
+                              "click Set Location again and enter your Mac password "
+                              "when the system dialog appears")
+            return False
+    elif os.name == "nt":
+        # UAC elevation on Windows.  SW_HIDE (0) keeps the helper invisible.
+        try:
+            import ctypes
+            params = " ".join('"%s"' % arg for arg in command[1:])
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", command[0], params, None, 0)
+            if result <= 32:
+                # User declined the UAC prompt or the launch failed.
+                _tunneld_error = ("UAC elevation was declined — click Set Location "
+                                  "again and approve the administrator prompt")
+                return False
+        except Exception:
+            _tunneld_error = "Could not launch the elevated tunneld helper"
+            return False
+    else:
+        # Linux and others: best effort without elevation.
+        if not _spawn_detached(command):
+            _tunneld_error = "Failed to spawn the tunneld helper process"
+            return False
+
+    # Wait until the RSD endpoint answers (first tunnel can take a while).
+    for _ in range(25):
+        if _tunnel_port_ready():
+            return True
+        time.sleep(0.8)
+    _tunneld_error = ("tunneld did not come up on 127.0.0.1:49151 — "
+                      "see " + log_path + " for details")
+    return False
 
 
 def _tunnel_port_ready():
     """Check the local RSD endpoint, not just a matching process name."""
     try:
-        with socket.create_connection(("127.0.0.1", 49151), timeout=0.5):
+        with socket.create_connection((TUNNELD_HOST, TUNNELD_PORT), timeout=0.5):
             return True
     except OSError:
         return False
+
+
+def run_tunneld_forever():
+    """Run the tunneld server in the foreground (--tunneld helper mode).
+
+    This is what the frozen bundle executes when re-launched (elevated) by
+    ensure_tunneld(), so the daemon runs without opening a second GUI.
+    """
+    from pymobiledevice3.remote.common import TunnelProtocol
+    from pymobiledevice3.tunneld.server import TunneldRunner
+
+    TunneldRunner.create(TUNNELD_HOST, TUNNELD_PORT, protocol=TunnelProtocol.DEFAULT)
 
 
 async def set_location(latitude, longitude, serial=None):
@@ -232,14 +372,24 @@ async def set_location(latitude, longitude, serial=None):
 
     if major >= 17:
         if not ensure_tunneld():
-            raise ConnectionError("tunneld is not ready on 127.0.0.1:49151")
-        provider, loc_sim = await _open_dvt_session(udid)
-        try:
-            await loc_sim.set(latitude, longitude)
-        except Exception:
-            await _close_dvt_session(provider, loc_sim)
-            raise
-        return {"provider": provider, "sim": loc_sim, "ios_major": major}
+            raise ConnectionError(_tunneld_error or "tunneld is not ready on 127.0.0.1:49151")
+        # The RemoteXPC/DTX channel occasionally dies mid-flight (e.g. zlib
+        # "incorrect header check" on a corrupted stream).  Such errors poison
+        # the whole session, so retry by rebuilding the session from scratch.
+        last_error = None
+        for attempt in range(3):
+            provider = loc_sim = None
+            try:
+                provider, loc_sim = await _open_dvt_session(udid)
+                await loc_sim.set(latitude, longitude)
+                return {"provider": provider, "sim": loc_sim, "ios_major": major}
+            except Exception as exc:
+                last_error = exc
+                await _close_dvt_session(provider, loc_sim)
+                if attempt < 2:
+                    await asyncio.sleep(1.0 + attempt)
+        raise ConnectionError(
+            f"Location update failed after 3 attempts: {last_error}") from last_error
     else:
         lockdown = await _get_lockdown(serial=serial)
         from pymobiledevice3.services.simulate_location import DtSimulateLocation
@@ -254,19 +404,24 @@ async def clear_location(serial=None):
 
     if major >= 17:
         ensure_tunneld()
-        rsd = await _get_lockdown_via_tunneld(udid)
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-        async with DvtProvider(rsd) as provider:
-            async with LocationSimulation(provider) as loc_sim:
-                for attempt in range(3):
-                    try:
+        # Rebuild the whole session on failure — a corrupted channel cannot
+        # be recovered from inside the same session.
+        last_error = None
+        for attempt in range(3):
+            try:
+                rsd = await _get_lockdown_via_tunneld(udid)
+                async with DvtProvider(rsd) as provider:
+                    async with LocationSimulation(provider) as loc_sim:
                         await loc_sim.clear()
-                        break
-                    except Exception:
-                        if attempt == 2:
-                            raise
-                        await asyncio.sleep(0.8)
+                        return
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(1.0 + attempt)
+        raise ConnectionError(
+            f"Clear failed after 3 attempts: {last_error}") from last_error
     else:
         lockdown = await _get_lockdown(serial=serial)
         from pymobiledevice3.services.simulate_location import DtSimulateLocation
@@ -280,12 +435,22 @@ async def play_gpx_file(filepath, serial=None):
     major, udid = await _get_device_session_context(serial)
 
     if major >= 17:
-        rsd = await _get_lockdown_via_tunneld(udid)
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-        async with DvtProvider(rsd) as provider:
-            async with LocationSimulation(provider) as loc_sim:
-                await loc_sim.play_gpx_file(filepath)
+        last_error = None
+        for attempt in range(3):
+            try:
+                rsd = await _get_lockdown_via_tunneld(udid)
+                async with DvtProvider(rsd) as provider:
+                    async with LocationSimulation(provider) as loc_sim:
+                        await loc_sim.play_gpx_file(filepath)
+                        return
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    await asyncio.sleep(1.0 + attempt)
+        raise ConnectionError(
+            f"GPX playback failed after 3 attempts: {last_error}") from last_error
     else:
         lockdown = await _get_lockdown(serial=serial)
         from pymobiledevice3.services.simulate_location import DtSimulateLocation
@@ -295,22 +460,13 @@ async def play_gpx_file(filepath, serial=None):
 
 
 def check_tunneld_running():
-    """Check if pymobiledevice3 tunneld process is running."""
-    try:
-        result = subprocess.run(
-            ["pgrep", "-f", "pymobiledevice3 remote tunneld"],
-            capture_output=True, timeout=3
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        try:
-            result = subprocess.run(
-                ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV"],
-                capture_output=True, text=True, timeout=5
-            )
-            return "tunneld" in result.stdout.lower()
-        except Exception:
-            return False
+    """Check whether the tunneld server is up.
+
+    The listening RSD port is the authoritative signal on every platform:
+    process-name scans miss the frozen helper (FakeGPS.exe --tunneld) and
+    can match stale processes.
+    """
+    return _tunnel_port_ready()
 
 
 _loop = None

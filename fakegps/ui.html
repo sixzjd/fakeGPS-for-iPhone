@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>FakeGPS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='white'/%3E%3Cpath d='M32 12c-11 0-19 8-19 18 0 14 19 23 19 23s19-9 19-23c0-10-8-18-19-18Zm0 25a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z' fill='black'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='white'/%3E%3Cg transform='translate(11,11) scale(1.75)' fill='none' stroke='%230b0b0b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/%3E%3Ccircle cx='12' cy='10' r='3'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -108,13 +108,13 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.05);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 .search-box:focus-within {
   border-color: var(--cyan);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(0,212,255,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.15);
 }
 
 .search-box input {
@@ -135,9 +135,9 @@ html, body {
 
 .search-box button {
   padding: 14px 20px;
-  background: linear-gradient(135deg, var(--cyan), #0099cc);
+  background: #fff;
   border: none;
-  color: var(--bg-deep);
+  color: #111;
   font-family: var(--font-body);
   font-weight: 700;
   font-size: 13px;
@@ -290,7 +290,7 @@ html, body {
 .toast.info {
   background: var(--cyan-dim);
   color: var(--cyan);
-  border: 1px solid rgba(0,212,255,0.3);
+  border: 1px solid rgba(255,255,255,0.3);
 }
 
 /* ── Sidebar ── */
@@ -323,7 +323,7 @@ html, body {
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  box-shadow: 0 4px 16px rgba(0,212,255,0.3);
+  box-shadow: 0 4px 16px rgba(255,255,255,0.3);
 }
 
 .app-title {
@@ -346,7 +346,7 @@ html, body {
 }
 .sidebar-content::-webkit-scrollbar { width: 4px; }
 .sidebar-content::-webkit-scrollbar-track { background: transparent; }
-.sidebar-content::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+.sidebar-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
 /* ── Section Cards ── */
 .section {
@@ -416,7 +416,7 @@ select option {
   padding: 0;
   border-radius: var(--radius-sm);
   background: var(--cyan-dim);
-  border: 1px solid rgba(0,212,255,0.2);
+  border: 1px solid rgba(255,255,255,0.2);
   color: var(--cyan);
   cursor: pointer;
   transition: all 0.2s;
@@ -424,7 +424,7 @@ select option {
   flex-shrink: 0;
 }
 .btn-icon:hover {
-  background: rgba(0,212,255,0.25);
+  background: rgba(255,255,255,0.25);
   border-color: var(--cyan);
 }
 
@@ -517,7 +517,7 @@ input[readonly] {
 }
 .place-btn:hover {
   background: var(--cyan-dim);
-  border-color: rgba(0,212,255,0.25);
+  border-color: rgba(255,255,255,0.25);
   transform: translateY(-1px);
 }
 .place-btn:active { transform: translateY(0); }
@@ -545,7 +545,7 @@ input[readonly] {
 }
 .log-area::-webkit-scrollbar { width: 3px; }
 .log-area::-webkit-scrollbar-track { background: transparent; }
-.log-area::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+.log-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
 .log-entry { margin-bottom: 2px; }
 .log-entry .time { color: var(--text-muted); margin-right: 6px; }
@@ -586,8 +586,8 @@ input[readonly] {
     0deg,
     transparent,
     transparent 2px,
-    rgba(0,212,255,0.008) 2px,
-    rgba(0,212,255,0.008) 4px
+    rgba(255,255,255,0.008) 2px,
+    rgba(255,255,255,0.008) 4px
   );
 }
 
@@ -704,7 +704,7 @@ input[readonly] {
 .coords-format label:hover { border-color: rgba(255,255,255,0.2); }
 .coords-format label.selected {
   background: var(--cyan-dim);
-  border-color: rgba(0,212,255,0.3);
+  border-color: rgba(255,255,255,0.3);
   color: var(--cyan);
 }
 
@@ -785,7 +785,7 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.2.0</div>
+        <div class="app-version">v6.2.1</div>
       </div>
     </div>
 
@@ -925,10 +925,23 @@ function showLocationActive(lat, lng) {
   var badgeCoords = document.getElementById('badgeCoords');
   badge.classList.add('visible');
   badgeCoords.textContent = lat + ', ' + lng;
-  document.getElementById('map-info') && document.querySelector('.map-info').classList.add('active');
+  var mapInfo = document.querySelector('.map-info');
+  if (mapInfo) mapInfo.classList.add('active');
   document.getElementById('coordsFormat').classList.add('visible');
-  map.setView([lat, lng], Math.max(map.getZoom(), 15), {animate: true});
+  // Tiles are GCJ-02: display the active point at its converted position so
+  // applying the spoof never yanks the view sideways by the coord offset.
+  var gcj = wgs84ToGcj02(lat, lng);
+  if (marker) map.removeLayer(marker);
+  marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
+  map.flyTo(gcj, Math.max(map.getZoom(), 15), {duration: 0.8});
   document.getElementById('coordsHint').textContent = 'Location active';
+}
+
+function locationFailed() {
+  // Called from Python when the spoof could not be applied: roll the UI
+  // back so it never claims a location that is not active.
+  hideLocationActive();
+  document.getElementById('coordsHint').textContent = 'Failed — check the log and retry';
 }
 
 function hideLocationActive() {
@@ -950,24 +963,32 @@ L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scal
   attribution: '&copy; Amap'
 }).addTo(map);
 
-// Custom marker icon
+// Custom marker icon — same pin as the app icon, tile background cut away
 var markerIcon = L.divIcon({
   className: '',
-  html: '<div style="width:26px;height:32px;position:relative;filter:drop-shadow(0 2px 3px rgba(0,0,0,.65))"><svg width="26" height="32" viewBox="0 0 26 32" xmlns="http://www.w3.org/2000/svg"><path d="M13 1C6.4 1 1 6.4 1 13c0 9 12 18 12 18s12-9 12-18C25 6.4 19.6 1 13 1Z" fill="white" stroke="#111" stroke-width="1.7"/><circle cx="13" cy="13" r="4.5" fill="white" stroke="#111" stroke-width="1.7"/></svg></div>',
-  iconSize: [26, 32],
-  iconAnchor: [13, 32]
+  html: '<div style="width:32px;height:32px;position:relative;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))"><svg width="32" height="32" viewBox="-3 -3 30 30" xmlns="http://www.w3.org/2000/svg"><g stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="none" stroke="white" stroke-width="5"/><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="white" stroke="#0b0b0b" stroke-width="2.5"/><circle cx="12" cy="10" r="3" fill="none" stroke="#0b0b0b" stroke-width="2.5"/></g></svg></div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 27]
 });
 
-// ── GCJ-02 -> WGS-84 ──
-function gcj02ToWgs84(lat, lng) {
+// ── GCJ-02 <-> WGS-84 ──
+function _gcjDelta(lat, lng) {
   var a=6378245.0,ee=0.00669342162296594323;
   function tl(x,y){var r=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;r+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;return r;}
-  function tg(x,y){var r=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;r+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;return r;}
+  function tg(x,y){var r=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;r+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x*Math.PI/30))*2/3;return r;}
   var dlat=tl(lng-105,lat-35),dlng=tg(lng-105,lat-35);
   var rl=lat/180*Math.PI,mg=Math.sin(rl);mg=1-ee*mg*mg;var sq=Math.sqrt(mg);
   dlat=(dlat*180)/((a*(1-ee))/(mg*sq)*Math.PI);
   dlng=(dlng*180)/(a/sq*Math.cos(rl)*Math.PI);
-  return [parseFloat((lat*2-(lat+dlat)).toFixed(6)),parseFloat((lng*2-(lng+dlng)).toFixed(6))];
+  return [dlat, dlng];
+}
+function gcj02ToWgs84(lat, lng) {
+  var d=_gcjDelta(lat, lng);
+  return [parseFloat((lat-d[0]).toFixed(6)),parseFloat((lng-d[1]).toFixed(6))];
+}
+function wgs84ToGcj02(lat, lng) {
+  var d=_gcjDelta(lat, lng);
+  return [parseFloat((lat+d[0]).toFixed(6)),parseFloat((lng+d[1]).toFixed(6))];
 }
 
 // ── Select Point ──
@@ -995,11 +1016,13 @@ function applyLocation() {
   if (selectedLat === null) return;
   document.title = 'SET:' + selectedLat + ',' + selectedLng;
   document.getElementById('coordsHint').textContent = 'Setting location...';
-  // Call pywebview API if available
+  // Call pywebview API if available; Python confirms via showLocationActive()
+  // on success or locationFailed() on error.
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.set_location(selectedLat, selectedLng);
+  } else {
+    showLocationActive(selectedLat, selectedLng);
   }
-  showLocationActive(selectedLat, selectedLng);
 }
 
 function copyCoords() {
@@ -1180,16 +1203,18 @@ var BUILTIN_PLACES = [
       document.getElementById('coordsDisplay').textContent = p.lat + ', ' + p.lng;
       document.getElementById('coordsHint').textContent = 'Setting ' + p.label + '...';
       document.getElementById('actionBtns').style.display = 'flex';
-      // Show marker at GCJ-02 position (approximate, for display on Amap tiles)
-      map.setView([p.lat, p.lng], 15);
+      // Show marker at GCJ-02 position so it sits on the real landmark
+      var gcj = wgs84ToGcj02(p.lat, p.lng);
+      map.setView(gcj, 15);
       if (marker) map.removeLayer(marker);
-      marker = L.marker([p.lat, p.lng], {icon: markerIcon}).addTo(map);
+      marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
       // Auto-apply via title bridge (Python reads SET: from title)
       document.title = 'SET:' + p.lat + ',' + p.lng;
       if (window.pywebview && window.pywebview.api) {
         window.pywebview.api.set_location(p.lat, p.lng);
+      } else {
+        showLocationActive(p.lat, p.lng);
       }
-      showLocationActive(p.lat, p.lng);
     };
     grid.appendChild(btn);
   });
