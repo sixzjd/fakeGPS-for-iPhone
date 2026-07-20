@@ -9,6 +9,10 @@ import asyncio
 import subprocess
 import threading
 import concurrent.futures
+import os
+import sys
+import shutil
+import time
 from dataclasses import dataclass
 
 
@@ -162,6 +166,42 @@ async def list_connected_devices():
     return result
 
 
+def list_android_devices():
+    """Return Android devices visible through the optional ADB executable."""
+    adb = shutil.which("adb")
+    if not adb:
+        return []
+    try:
+        lines = subprocess.run([adb, "devices", "-l"], capture_output=True,
+                               text=True, timeout=8, check=False).stdout.splitlines()
+        return [line.split()[0] for line in lines[1:] if "\tdevice" in line]
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+
+_tunneld_process = None
+
+
+def ensure_tunneld():
+    """Start tunneld from the app when iOS 17+ needs it."""
+    global _tunneld_process
+    if check_tunneld_running():
+        return False
+    command = [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld"]
+    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
+              "stdin": subprocess.DEVNULL, "start_new_session": True}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    elif os.geteuid() != 0:
+        command.insert(0, "sudo")
+    try:
+        _tunneld_process = subprocess.Popen(command, **kwargs)
+        time.sleep(0.8)
+        return check_tunneld_running()
+    except OSError:
+        return False
+
+
 async def set_location(latitude, longitude, serial=None):
     """Set simulated GPS location on connected iPhone.
 
@@ -174,6 +214,7 @@ async def set_location(latitude, longitude, serial=None):
     major, udid = await _get_device_session_context(serial)
 
     if major >= 17:
+        ensure_tunneld()
         provider, loc_sim = await _open_dvt_session(udid)
         try:
             await loc_sim.set(latitude, longitude)
@@ -194,12 +235,20 @@ async def clear_location(serial=None):
     major, udid = await _get_device_session_context(serial)
 
     if major >= 17:
+        ensure_tunneld()
         rsd = await _get_lockdown_via_tunneld(udid)
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
         async with DvtProvider(rsd) as provider:
             async with LocationSimulation(provider) as loc_sim:
-                await loc_sim.clear()
+                for attempt in range(3):
+                    try:
+                        await loc_sim.clear()
+                        break
+                    except Exception:
+                        if attempt == 2:
+                            raise
+                        await asyncio.sleep(0.8)
     else:
         lockdown = await _get_lockdown(serial=serial)
         from pymobiledevice3.services.simulate_location import DtSimulateLocation

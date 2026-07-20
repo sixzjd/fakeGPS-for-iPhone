@@ -1,4 +1,6 @@
-# FakeGPS v6.1.0 - iPhone 虚拟定位工具 | iOS GPS 模拟器
+# FakeGPS v6.2.0 - iPhone 虚拟定位工具 | iOS GPS 模拟器
+
+下载也可以访问：https://www.sixzjd.sbs
 
 跨平台（macOS + Windows）iPhone 虚拟 GPS 定位工具。免越狱、无需 Xcode，通过 USB 为 iPhone 设置虚拟定位。
 

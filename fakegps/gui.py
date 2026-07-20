@@ -65,14 +65,15 @@ class API:
 
     def refresh_devices(self):
         """Scan for connected iOS devices and update the UI."""
-        from .core import list_connected_devices, run_async
+        from .core import list_connected_devices, list_android_devices, run_async
 
         def _worker():
             try:
                 devices = run_async(list_connected_devices())
-                if not devices:
+                android = list_android_devices()
+                if not devices and not android:
                     self._js("updateDeviceList([])")
-                    self._js("logMsg('No devices found.')")
+                    self._js("logMsg('No devices found. Check Apple Devices/ADB and USB trust.')")
                     return
                 for d in devices:
                     self._js(f"logMsg('Device: {d.name} | iOS {d.ios_version} | UDID: {d.udid[:12]}...')")
@@ -82,7 +83,9 @@ class API:
                     "ios_version": d.ios_version
                 } for d in devices])
                 self._js(f"updateDeviceList({devs_json})")
-                self._js(f"logMsg('Found {len(devices)} device(s).', 'success')")
+                if android:
+                    self._js(f"logMsg('Android detected via ADB: {len(android)} device(s).', 'success')")
+                self._js(f"logMsg('Found {len(devices)} iPhone(s).', 'success')")
             except Exception as e:
                 err = str(e).replace(chr(39), chr(92) + chr(39)).replace("\n", " ")
                 self._js(f"setDeviceError('{err}')")
@@ -123,7 +126,7 @@ class API:
                 self._js(f"showToast('Failed: {err}', 'error')")
                 # Check tunneld only after failure, as a hint
                 if not check_tunneld_running():
-                    self._js("logMsg('Hint: tunneld not running. For iOS 17+, run the sudo command first.', 'warn')")
+                    self._js("logMsg('tunneld could not start automatically. Approve the password prompt and retry.', 'warn')")
                 else:
                     self._js("logMsg('tunneld is running. Check device connection and try again.', 'warn')")
 
@@ -249,7 +252,7 @@ def main():
     html_content = html_path.read_text(encoding="utf-8")
 
     window = webview.create_window(
-        title="FakeGPS v6.1.0",
+        title="FakeGPS v6.2.0",
         html=html_content,
         js_api=api,
         width=1280,
