@@ -14,6 +14,7 @@ import sys
 import shutil
 import time
 import shlex
+import socket
 from dataclasses import dataclass
 
 
@@ -191,37 +192,29 @@ _tunneld_process = None
 def ensure_tunneld():
     """Start tunneld from the app when iOS 17+ needs it."""
     global _tunneld_process
-    if check_tunneld_running():
-        return False
+    if check_tunneld_running() and _tunnel_port_ready():
+        return True
     command = [sys.executable, "-m", "pymobiledevice3", "remote", "tunneld", "--daemonize"]
     kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
               "stdin": subprocess.DEVNULL, "start_new_session": True}
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-    elif os.geteuid() != 0:
-        # Use the native macOS administrator prompt.  A GUI app has no useful
-        # stdin, so `sudo` alone would silently fail with the old approach.
-        shell_command = " ".join(shlex.quote(arg) for arg in command)
-        try:
-            apple_script = 'do shell script "' + shell_command.replace('"', '\\"') + '" with administrator privileges'
-            subprocess.run(
-                ["osascript", "-e", apple_script],
-                capture_output=True, text=True, timeout=30, check=False,
-            )
-            for _ in range(10):
-                if check_tunneld_running():
-                    return True
-                time.sleep(1)
-            return False
-        except (OSError, subprocess.SubprocessError):
-            return False
     try:
         _tunneld_process = subprocess.Popen(command, **kwargs)
-        for _ in range(10):
-            if check_tunneld_running():
+        for _ in range(15):
+            if check_tunneld_running() and _tunnel_port_ready():
                 return True
-            time.sleep(1)
+            time.sleep(0.8)
         return False
+    except OSError:
+        return False
+
+
+def _tunnel_port_ready():
+    """Check the local RSD endpoint, not just a matching process name."""
+    try:
+        with socket.create_connection(("127.0.0.1", 49151), timeout=0.5):
+            return True
     except OSError:
         return False
 
@@ -238,7 +231,8 @@ async def set_location(latitude, longitude, serial=None):
     major, udid = await _get_device_session_context(serial)
 
     if major >= 17:
-        ensure_tunneld()
+        if not ensure_tunneld():
+            raise ConnectionError("tunneld is not ready on 127.0.0.1:49151")
         provider, loc_sim = await _open_dvt_session(udid)
         try:
             await loc_sim.set(latitude, longitude)
