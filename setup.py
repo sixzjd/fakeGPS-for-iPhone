@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="fakegps",
-    version="6.2.1",
+    version="6.2.2",
     description="FakeGPS - iPhone virtual GPS location tool (cross-platform)",
     author="sixzjd",
     license="MIT",

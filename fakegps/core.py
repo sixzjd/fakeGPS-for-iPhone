@@ -15,6 +15,7 @@ import shutil
 import time
 import shlex
 import socket
+import tempfile
 from dataclasses import dataclass
 
 
@@ -261,6 +262,29 @@ def _spawn_detached(command):
             log_fh.close()
 
 
+def _launchdaemon_plist(command, log_path, label):
+    """Generate a LaunchDaemon plist XML for the tunneld helper.
+
+    launchd keeps the daemon alive independently of the osascript
+    privileged-helper session that installed it.
+    """
+    args_xml = "\n".join("        <string>" + a + "</string>" for a in command)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0">\n<dict>\n'
+        "    <key>Label</key>\n    <string>" + label + "</string>\n"
+        "    <key>ProgramArguments</key>\n    <array>\n"
+        + args_xml + "\n    </array>\n"
+        "    <key>RunAtLoad</key>\n    <true/>\n"
+        "    <key>KeepAlive</key>\n    <false/>\n"
+        "    <key>StandardOutPath</key>\n    <string>" + log_path + "</string>\n"
+        "    <key>StandardErrorPath</key>\n    <string>" + log_path + "</string>\n"
+        "</dict>\n</plist>\n"
+    )
+
+
 def ensure_tunneld():
     """Make sure the pymobiledevice3 tunneld server is up (iOS 17+).
 
@@ -287,12 +311,33 @@ def ensure_tunneld():
             _tunneld_error = "Failed to spawn the tunneld helper process"
             return False
     elif sys.platform == "darwin":
-        # Native macOS administrator prompt.  nohup + & keeps the daemon
-        # alive after the privileged helper shell exits; output is kept in
-        # a log file instead of /dev/null so failures can be diagnosed.
-        shell_command = ("nohup " + " ".join(shlex.quote(arg) for arg in command)
-                         + " >>" + shlex.quote(log_path) + " 2>&1 &")
-        apple_script = 'do shell script "' + shell_command.replace('"', '\\"') + '" with administrator privileges'
+        # Launch via LaunchDaemon plist + launchctl.  The old nohup+&
+        # approach failed because osascript's privileged helper kills
+        # background children when its session exits.  With launchctl
+        # the daemon is managed by launchd and survives independently.
+        plist_label = "com.fakegps.tunneld"
+        plist_dest = "/Library/LaunchDaemons/" + plist_label + ".plist"
+        plist_content = _launchdaemon_plist(command, log_path, plist_label)
+
+        # Write plist to temp (no elevation needed for /tmp).
+        plist_tmp = os.path.join(tempfile.gettempdir(), plist_label + ".plist")
+        try:
+            with open(plist_tmp, "w") as fh:
+                fh.write(plist_content)
+        except OSError:
+            _tunneld_error = "Could not write the tunneld launch configuration"
+            return False
+
+        # Privileged step: install plist + (re)start the daemon.
+        # bootout first (ignore failure if not loaded), then bootstrap.
+        shell_command = (
+            "cp " + shlex.quote(plist_tmp) + " " + shlex.quote(plist_dest)
+            + " && launchctl bootout system/" + plist_label + " 2>/dev/null; "
+            + "launchctl bootstrap system " + shlex.quote(plist_dest)
+        )
+        apple_script = ('do shell script "'
+                        + shell_command.replace('"', '\\"')
+                        + '" with administrator privileges')
         try:
             prompt = subprocess.run(
                 ["osascript", "-e", apple_script],

@@ -82,15 +82,16 @@ except:
 
 get_coords() {
     case "$1" in
-        tiananmen)  echo "39.90779 116.39122 天安门" ;;
+        tiananmen)  echo "39.907753 116.391205 天安门" ;;
         guomao)     echo "39.90727 116.45877 国贸CBD" ;;
-        wangjing)   echo "39.99271 116.47673 望京SOHO" ;;
+        birdnest)   echo "39.99287 116.39657 鸟巢" ;;
         shanghai)   echo "31.24050 121.48621 上海外滩" ;;
-        shenzhen)   echo "22.54600 114.05790 深圳市民中心" ;;
+        guangzhou)  echo "23.10642 113.32452 广州塔" ;;
         paris)      echo "48.8584 2.2945 巴黎埃菲尔铁塔" ;;
         newyork)    echo "40.7580 -73.9855 纽约时代广场" ;;
         tokyo)      echo "35.6586 139.7454 东京塔" ;;
-        london)     echo "51.5074 -0.1278 伦敦大本钟" ;;
+        london)     echo "51.5007 -0.1246 伦敦大本钟" ;;
+        rome)       echo "41.89021 12.49223 罗马斗兽场" ;;
         *)
             eval "val=\$CUSTOM_$1"
             [ -n "$val" ] && echo "$val"
@@ -161,16 +162,17 @@ show_help() {
     echo "   sudo python3 -m pymobiledevice3 remote tunneld"
     echo ""
     echo "内置地点:"
-    echo "  tiananmen  天安门          (39.90779, 116.39122)"
+    echo "  tiananmen  天安门          (39.907753, 116.391205)"
     echo "  guomao     国贸CBD         (39.90727, 116.45877)"
-    echo "  wangjing   望京SOHO        (39.99271, 116.47673)"
+    echo "  birdnest   鸟巢            (39.99287, 116.39657)"
     echo "  shanghai   上海外滩        (31.24050, 121.48621)"
-    echo "  shenzhen   深圳            (22.54600, 114.05790)"
+    echo "  guangzhou  广州塔          (23.10642, 113.32452)"
     echo ""
     echo "  paris      巴黎埃菲尔铁塔  (48.8584, 2.2945)"
     echo "  newyork    纽约时代广场    (40.7580, -73.9855)"
     echo "  tokyo      东京塔          (35.6586, 139.7454)"
-    echo "  london     伦敦大本钟      (51.5074, -0.1278)"
+    echo "  london     伦敦大本钟      (51.5007, -0.1246)"
+    echo "  rome       罗马斗兽场      (41.89021, 12.49223)"
     if [ -f "$CONF" ] && grep -q "^CUSTOM_" "$CONF" 2>/dev/null; then
         echo ""
         echo "自定义地点:"
@@ -267,7 +269,7 @@ case "${1:-help}" in
   <div class="quick-places">
     <span class="quick-btn" onclick="goTo(39.90779,116.39122,'天安门')">天安门</span>
     <span class="quick-btn" onclick="goTo(39.9086,116.4605,'国贸')">国贸</span>
-    <span class="quick-btn" onclick="goTo(39.9940,116.4784,'望京')">望京</span>
+    <span class="quick-btn" onclick="goTo(39.9943,116.4028,'鸟巢')">鸟巢</span>
     <span class="quick-btn" onclick="goTo(31.2304,121.4737,'上海')">上海</span>
     <span class="quick-btn" onclick="goTo(48.8584,2.2945,'巴黎')">巴黎</span>
     <span class="quick-btn" onclick="goTo(40.7580,-73.9855,'纽约')">纽约</span>
@@ -466,7 +468,7 @@ __FAKEGPS_MAP_HTML__
         echo "📍 设置虚拟定位: 纬度=$2 经度=$3"
         $PM developer dvt simulate-location set -- "$2" "$3"
         ;;
-    tiananmen|guomao|wangjing|shanghai|shenzhen|paris|newyork|tokyo|london)
+    tiananmen|guomao|birdnest|shanghai|guangzhou|paris|newyork|tokyo|london|rome)
         check_device
         read lat lon name <<< $(get_coords "$1")
         echo "📍 设置虚拟定位: $name ($lat, $lon)"
@@ -530,7 +532,7 @@ __FAKEGPS_MAP_HTML__
         ;;
     places)
         echo "内置地点:"
-        for p in tiananmen guomao wangjing shanghai shenzhen paris newyork tokyo london; do
+        for p in tiananmen guomao birdnest shanghai guangzhou paris newyork tokyo london rome; do
             read lat lon name <<< $(get_coords "$p")
             printf "  %-10s %-10s (%s, %s)\n" "$p" "$name" "$lat" "$lon"
         done
@@ -576,7 +578,7 @@ __FAKEGPS_MAP_HTML__
                         done
                         ;;
                     commands)
-                        echo "内置地点: tiananmen guomao wangjing shanghai shenzhen paris newyork tokyo london"
+                        echo "内置地点: tiananmen guomao birdnest shanghai guangzhou paris newyork tokyo london rome"
                         echo "命令: /set /map /clear /places /add /remove /play /list /commands /exit /help"
                         ;;
                     help|h)
