@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import glob
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 block_cipher = None
 src_root = Path(SPECPATH)
@@ -10,6 +12,15 @@ src_root = Path(SPECPATH)
 # as untrusted, and can prevent Python's runtime DLL from loading.
 is_windows = sys.platform == 'win32'
 windows_version_file = str(src_root / 'windows_version_info.txt') if is_windows else None
+
+# pywebview's Windows backend uses pythonnet.  Collect the package as a whole
+# so PyInstaller cannot silently mix a loader from one release with a runtime
+# DLL from another release.
+PYTHONNET_HIDDENIMPORTS = collect_submodules('pythonnet') + collect_submodules('clr_loader')
+PYTHONNET_DATAS = collect_data_files('pythonnet') + collect_data_files('clr_loader')
+PYTHONNET_BINARIES = collect_dynamic_libs('pythonnet') + collect_dynamic_libs('clr_loader')
+for runtime_dll in glob.glob(str(Path(sys.prefix) / 'Lib' / 'site-packages' / 'pythonnet' / 'runtime' / '*.dll')):
+    PYTHONNET_BINARIES.append((runtime_dll, 'pythonnet/runtime'))
 
 # ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
@@ -39,10 +50,9 @@ EXCLUDED_MODULES = [
 a = Analysis(
     [str(src_root / 'run_gui.py')],
     pathex=[str(src_root)],
-    binaries=[],
     datas=[
         (str(src_root / 'fakegps' / 'ui.html'), 'fakegps'),
-    ],
+    ] + PYTHONNET_DATAS,
     hiddenimports=[
         'pymobiledevice3',
         'pymobiledevice3.usbmux',
@@ -59,7 +69,8 @@ a = Analysis(
         'webview.platforms.edgechromium',
         'webview.platforms.winforms',
         'webview.util',
-    ],
+    ] + PYTHONNET_HIDDENIMPORTS,
+    binaries=PYTHONNET_BINARIES,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[str(src_root / 'hook_stub_modules.py')],
@@ -114,7 +125,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.2',
+            'CFBundleShortVersionString': '6.2.4',
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

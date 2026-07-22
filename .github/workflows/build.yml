@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install pymobiledevice3 pywebview pyinstaller
+          pip install -r requirements.txt pyinstaller
       - name: Build macOS app
         run: pyinstaller fakegps.spec --clean -y
       - name: Zip macOS app
@@ -48,7 +48,12 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install pymobiledevice3 pywebview pyinstaller
+          pip install -r requirements.txt pyinstaller
+      - name: Verify Python.NET runtime
+        shell: pwsh
+        run: |
+          python -c "import pywebview, pythonnet, clr_loader; print('pywebview', pywebview.__version__); print('pythonnet', pythonnet.__version__); print('clr-loader', clr_loader.__version__)"
+          python check_pythonnet_runtime.py
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
       - name: Harden Windows PE files
