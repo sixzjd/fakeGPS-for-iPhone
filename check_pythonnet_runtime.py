@@ -10,7 +10,7 @@ try:
 except Exception as exc:
     raise SystemExit(f'Python.NET import failed: {exc}')
 
-runtime = Path(pythonnet.__file__).with_name('runtime') / 'Python.Runtime.dll'
+runtime = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(pythonnet.__file__).with_name('runtime') / 'Python.Runtime.dll'
 if not runtime.is_file():
     raise SystemExit(f'Python.Runtime.dll not found: {runtime}')
 

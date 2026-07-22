@@ -67,6 +67,9 @@ jobs:
           echo 完成！现在可以正常运行 FakeGPS.exe 了。
           pause
           "@ -Encoding Default
+      - name: Test packaged Windows startup
+        shell: pwsh
+        run: .\test_windows_startup.ps1
       - name: Zip Windows build
         run: Compress-Archive -Path dist\FakeGPS\* -DestinationPath dist\FakeGPS-Windows.zip
       - name: Upload to release
