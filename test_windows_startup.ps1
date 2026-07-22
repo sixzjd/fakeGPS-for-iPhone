@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot 'dist\FakeGPS')).Path
 $exe = Join-Path $root 'FakeGPS.exe'
-$runtimeDll = Join-Path $root 'pythonnet\runtime\Python.Runtime.dll'
+$runtimeDll = Join-Path $root '_internal\pythonnet\runtime\Python.Runtime.dll'
 $logs = Join-Path $root 'startup-test'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
@@ -16,7 +16,7 @@ if (-not (Test-Path $runtimeDll)) {
 $dlls = @(Get-ChildItem -Path $root -Recurse -Filter 'Python.Runtime.dll' -File)
 if ($dlls.Count -ne 1 -or $dlls[0].FullName -ne (Resolve-Path $runtimeDll).Path) {
   $dlls | ForEach-Object { Write-Host "Python.Runtime.dll: $($_.FullName)" }
-  throw "Expected exactly one Python.Runtime.dll at pythonnet\runtime"
+  throw "Expected exactly one Python.Runtime.dll at _internal\pythonnet\runtime"
 }
 
 Write-Host "Checking packaged Python.Runtime.Loader.Initialize"
