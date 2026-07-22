@@ -1,5 +1,35 @@
 $ErrorActionPreference = 'Stop'
 
+Add-Type @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public static class FakeGpsWindowProbe {
+  private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr extra);
+  [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+
+  public static string FindVisibleWindow(uint targetPid) {
+    string result = null;
+    EnumWindows((hWnd, extra) => {
+      uint pid;
+      GetWindowThreadProcessId(hWnd, out pid);
+      if (pid == targetPid && IsWindowVisible(hWnd)) {
+        var title = new StringBuilder(512);
+        GetWindowText(hWnd, title, title.Capacity);
+        result = hWnd.ToString() + "|" + title.ToString();
+        return false;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return result;
+  }
+}
+'@
+
 $root = (Resolve-Path (Join-Path $PSScriptRoot 'dist\FakeGPS')).Path
 $exe = Join-Path $root 'FakeGPS.exe'
 $runtimeDll = Join-Path $root '_internal\pythonnet\runtime\Python.Runtime.dll'
@@ -34,7 +64,13 @@ try {
     if (Test-Path $stderr) { Get-Content $stderr }
     throw 'FakeGPS.exe exited during the 10-second startup smoke test'
   }
-  Write-Host 'FakeGPS.exe remained alive for 10 seconds; startup smoke test passed.'
+  $window = [FakeGpsWindowProbe]::FindVisibleWindow([uint32]$process.Id)
+  if ([string]::IsNullOrWhiteSpace($window)) {
+    if (Test-Path $stdout) { Get-Content $stdout }
+    if (Test-Path $stderr) { Get-Content $stderr }
+    throw 'FakeGPS.exe stayed alive but did not create a visible Windows GUI window'
+  }
+  Write-Host "FakeGPS.exe created a visible window ($window) and remained alive for 10 seconds; startup smoke test passed."
 }
 finally {
   if (-not $process.HasExited) {
