@@ -151,11 +151,12 @@ def interactive_mode():
                 print(f"Not found: {args[0]}")
         elif cmd == "play":
             if not args:
-                print("Usage: /play <file.gpx>")
+                print("Usage: /play <file.gpx> [speed_kmh]")
                 continue
-            print(f"Playing GPX: {args[0]}")
+            speed = float(args[1]) if len(args) > 1 else 5.0
+            print(f"Playing GPX: {args[0]} @ {speed} km/h")
             try:
-                run_async(play_gpx_file(args[0]))
+                run_async(play_gpx_file(args[0], speed_kmh=speed))
                 print("GPX playback finished.")
             except Exception as e:
                 print(f"Error: {e}")
@@ -190,7 +191,7 @@ Commands:
   /places              List all places
   /add <n> <lat> <lng> Add custom place
   /remove <name>       Remove custom place
-  /play <file.gpx>     Play GPX trajectory
+  /play <file.gpx> [speed]  Play GPX trajectory (speed in km/h, default 5)
   /help                Show this help
   /exit                Exit
 
@@ -265,9 +266,10 @@ def main():
                 print(f"Not found: {all_args[0]}")
         elif cmd in ("play",):
             if not all_args:
-                print("Usage: fakegps play <file.gpx>")
+                print("Usage: fakegps play <file.gpx> [speed_kmh]")
                 sys.exit(1)
-            run_async(play_gpx_file(all_args[0]))
+            speed = float(all_args[1]) if len(all_args) > 1 else 5.0
+            run_async(play_gpx_file(all_args[0], speed_kmh=speed))
         elif cmd in ("help", "--help", "-h"):
             _print_help()
         else:

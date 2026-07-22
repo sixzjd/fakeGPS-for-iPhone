@@ -1522,7 +1522,16 @@ input[readonly] {
             <input type="text" id="gpxPath" placeholder="Select .gpx file..." readonly />
             <button class="btn btn-ghost" onclick="browseGpx()" style="white-space:nowrap">Browse</button>
           </div>
-          <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%">
+          <div class="gpx-row" style="margin-top:8px">
+            <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Speed (no timestamps)</label>
+            <select id="gpxSpeed" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:13px">
+              <option value="5" selected>5 km/h (Walk)</option>
+              <option value="15">15 km/h (Cycle)</option>
+              <option value="40">40 km/h (Drive)</option>
+              <option value="80">80 km/h (Highway)</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%;margin-top:8px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
@@ -1997,9 +2006,10 @@ function playGpx() {
     if (w < 90) bar.style.width = (w + 2) + '%';
   }, 500);
   window._gpxTimer = _gpxTimer;
-  logMsg('Playing GPX: ' + path);
+  var speed = parseFloat(document.getElementById('gpxSpeed').value) || 5;
+  logMsg('Playing GPX: ' + path + ' @ ' + speed + ' km/h');
   if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.play_gpx(path);
+    window.pywebview.api.play_gpx(path, speed);
   }
 }
 

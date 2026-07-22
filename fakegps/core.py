@@ -475,9 +475,59 @@ async def clear_location(serial=None):
         await lockdown.close()
 
 
-async def play_gpx_file(filepath, serial=None):
-    """Play a GPX file trajectory on the device."""
+async def play_gpx_file(filepath, serial=None, speed_kmh=5.0):
+    """Play a GPX file trajectory on the device.
+
+    If the GPX contains <time> elements, pymobiledevice3's built-in timing
+    is used.  Otherwise, inter-point delays are calculated from haversine
+    distance and *speed_kmh* (default 5 km/h ≈ walking pace).
+    """
+    import math
+    from .gpx import parse_gpx
+
+    points = parse_gpx(filepath)
+    has_time = any(p[3] for p in points)  # p[3] is time_str
+
     major, udid = await _get_device_session_context(serial)
+
+    if has_time:
+        # GPX has timestamps — delegate to pymobiledevice3 (respects <time>)
+        if major >= 17:
+            from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+            from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+            last_error = None
+            for attempt in range(3):
+                try:
+                    rsd = await _get_lockdown_via_tunneld(udid)
+                    async with DvtProvider(rsd) as provider:
+                        async with LocationSimulation(provider) as loc_sim:
+                            await loc_sim.play_gpx_file(filepath)
+                            return
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < 2:
+                        await asyncio.sleep(1.0 + attempt)
+            raise ConnectionError(
+                f"GPX playback failed after 3 attempts: {last_error}") from last_error
+        else:
+            lockdown = await _get_lockdown(serial=serial)
+            from pymobiledevice3.services.simulate_location import DtSimulateLocation
+            sim = DtSimulateLocation(lockdown)
+            await sim.play_gpx_file(filepath)
+            await lockdown.close()
+            return
+
+    # No timestamps — calculate timing from distance and speed
+    def _haversine(lat1, lon1, lat2, lon2):
+        R = 6371000.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = (math.sin(dlat / 2) ** 2 +
+             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+             math.sin(dlon / 2) ** 2)
+        return R * 2 * math.asin(math.sqrt(a))
+
+    speed_ms = speed_kmh * 1000.0 / 3600.0  # m/s
 
     if major >= 17:
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
@@ -488,7 +538,14 @@ async def play_gpx_file(filepath, serial=None):
                 rsd = await _get_lockdown_via_tunneld(udid)
                 async with DvtProvider(rsd) as provider:
                     async with LocationSimulation(provider) as loc_sim:
-                        await loc_sim.play_gpx_file(filepath)
+                        for i, (lat, lng, _ele, _t) in enumerate(points):
+                            if i > 0:
+                                prev = points[i - 1]
+                                d = _haversine(prev[0], prev[1], lat, lng)
+                                delay = d / speed_ms if speed_ms > 0 else 0
+                                if delay > 0:
+                                    await asyncio.sleep(delay)
+                            await loc_sim.set(lat, lng)
                         return
             except Exception as exc:
                 last_error = exc
@@ -500,7 +557,14 @@ async def play_gpx_file(filepath, serial=None):
         lockdown = await _get_lockdown(serial=serial)
         from pymobiledevice3.services.simulate_location import DtSimulateLocation
         sim = DtSimulateLocation(lockdown)
-        await sim.play_gpx_file(filepath)
+        for i, (lat, lng, _ele, _t) in enumerate(points):
+            if i > 0:
+                prev = points[i - 1]
+                d = _haversine(prev[0], prev[1], lat, lng)
+                delay = d / speed_ms if speed_ms > 0 else 0
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            await sim.set(lat, lng)
         await lockdown.close()
 
 

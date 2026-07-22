@@ -201,14 +201,14 @@ class API:
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def play_gpx(self, path):
+    def play_gpx(self, path, speed_kmh=5.0):
         """Play a GPX file trajectory on the device."""
         from .core import play_gpx_file, run_async
 
         def _worker():
             try:
-                self._js(f"logMsg('Playing GPX: {path}')")
-                run_async(play_gpx_file(path))
+                self._js(f"logMsg('Playing GPX: {path} @ {speed_kmh} km/h')")
+                run_async(play_gpx_file(path, speed_kmh=float(speed_kmh)))
                 self._js("gpxFinished()")
                 self._js("logMsg('GPX playback finished.', 'success')")
             except Exception as e:
