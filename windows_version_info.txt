@@ -1,0 +1,28 @@
+# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(6, 2, 2, 0),
+    prodvers=(6, 2, 2, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('040904B0', [
+        StringStruct('CompanyName', 'FakeGPS Project'),
+        StringStruct('FileDescription', 'FakeGPS iPhone virtual GPS location tool'),
+        StringStruct('FileVersion', '6.2.2.0'),
+        StringStruct('InternalName', 'FakeGPS'),
+        StringStruct('LegalCopyright', 'Copyright (c) FakeGPS Project'),
+        StringStruct('OriginalFilename', 'FakeGPS.exe'),
+        StringStruct('ProductName', 'FakeGPS'),
+        StringStruct('ProductVersion', '6.2.2.0')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

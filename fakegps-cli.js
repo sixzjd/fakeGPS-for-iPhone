@@ -186,6 +186,17 @@ async function ensureBinary() {
   console.log('   📦 Extracting...');
   await extractZip(zipPath, CACHE_DIR);
 
+  // Remove Mark of the Web on Windows (prevents SmartScreen/Defender blocking DLLs)
+  if (os.platform() === 'win32') {
+    try {
+      const { execSync } = require('child_process');
+      execSync(
+        `powershell -NoProfile -Command "Get-ChildItem '${CACHE_DIR}' -Recurse | Unblock-File"`,
+        { stdio: 'ignore', timeout: 30000 }
+      );
+    } catch (e) { /* non-critical */ }
+  }
+
   // Save version info
   fs.writeFileSync(VERSION_FILE, `${release.tag_name}\n${config.zipName}\n`);
 

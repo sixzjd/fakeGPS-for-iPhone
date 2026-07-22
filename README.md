@@ -29,6 +29,8 @@
 
 不需要安装 Python 或任何依赖。
 
+> **Windows 用户注意**：下载后如果弹出 SmartScreen 警告，点"更多信息" → "仍要运行"。如果提示 `Failed to load Python DLL`，右键 zip → 属性 → 勾选"解除锁定" → 重新解压；或解压后双击文件夹里的 `解除锁定.bat` 再运行。
+
 ### 方式二：官网下载（推荐）
 
 前往 [www.sixzjd.sbs](https://www.sixzjd.sbs) 下载 macOS 或 Windows 版本。

@@ -5,6 +5,12 @@ from pathlib import Path
 block_cipher = None
 src_root = Path(SPECPATH)
 
+# Keep Windows builds compatible with enterprise code-integrity policies.
+# UPX-compressed binaries and stripped PE files are more likely to be treated
+# as untrusted, and can prevent Python's runtime DLL from loading.
+is_windows = sys.platform == 'win32'
+windows_version_file = str(src_root / 'windows_version_info.txt') if is_windows else None
+
 # ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
     # IPython & friends
@@ -82,8 +88,9 @@ exe = EXE(
     icon=app_icon,
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
-    upx=True,
+    strip=False,
+    upx=False,
+    version=windows_version_file,
     console=False,
     disable_windowed_traceback=False,
 )
@@ -93,8 +100,8 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=True,
-    upx=True,
+    strip=False,
+    upx=False,
     upx_exclude=[],
     name='FakeGPS',
 )

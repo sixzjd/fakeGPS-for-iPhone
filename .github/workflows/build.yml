@@ -51,6 +51,17 @@ jobs:
           pip install pymobiledevice3 pywebview pyinstaller
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
+      - name: Harden Windows PE files
+        run: python patch_pe_security.py dist\FakeGPS
+      - name: Add Unblock script
+        run: |
+          Set-Content -Path "dist\FakeGPS\解除锁定.bat" -Value @"
+          @echo off
+          echo 正在解除 Windows 安全锁定...
+          powershell -NoProfile -Command "Get-ChildItem '%~dp0' -Recurse | Unblock-File"
+          echo 完成！现在可以正常运行 FakeGPS.exe 了。
+          pause
+          "@ -Encoding Default
       - name: Zip Windows build
         run: Compress-Archive -Path dist\FakeGPS\* -DestinationPath dist\FakeGPS-Windows.zip
       - name: Upload to release
