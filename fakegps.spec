@@ -22,6 +22,18 @@ PYTHONNET_BINARIES = collect_dynamic_libs('pythonnet') + collect_dynamic_libs('c
 for runtime_dll in glob.glob(str(Path(sys.prefix) / 'Lib' / 'site-packages' / 'pythonnet' / 'runtime' / '*.dll')):
     PYTHONNET_BINARIES.append((runtime_dll, 'pythonnet/runtime'))
 
+# pytun_pmd3 ships wintun DLLs that ctypes loads at runtime.
+# PyInstaller cannot detect this because the path is built dynamically.
+PYTUN_DATAS = []
+try:
+    import pytun_pmd3
+    _pytun_root = Path(pytun_pmd3.__file__).parent
+    for dll in (_pytun_root / 'wintun').rglob('*.dll'):
+        rel = dll.relative_to(_pytun_root)
+        PYTUN_DATAS.append((str(dll), str(Path('pytun_pmd3') / rel.parent)))
+except ImportError:
+    pass
+
 # ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
     # IPython & friends
@@ -52,7 +64,7 @@ a = Analysis(
     pathex=[str(src_root)],
     datas=[
         (str(src_root / 'fakegps' / 'ui.html'), 'fakegps'),
-    ] + PYTHONNET_DATAS,
+    ] + PYTHONNET_DATAS + PYTUN_DATAS,
     hiddenimports=[
         'pymobiledevice3',
         'pymobiledevice3.usbmux',
@@ -128,7 +140,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.6',
+            'CFBundleShortVersionString': '6.2.7',
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

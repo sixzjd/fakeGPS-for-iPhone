@@ -82,16 +82,16 @@ except:
 
 get_coords() {
     case "$1" in
-        tiananmen)  echo "39.907753 116.391205 天安门" ;;
-        guomao)     echo "39.90727 116.45877 国贸CBD" ;;
-        birdnest)   echo "39.99287 116.39657 鸟巢" ;;
-        shanghai)   echo "31.24050 121.48621 上海外滩" ;;
-        guangzhou)  echo "23.10642 113.32452 广州塔" ;;
+        tiananmen)  echo "39.9075 116.3914 天安门" ;;
+        guomao)     echo "39.9075 116.4590 国贸CBD" ;;
+        birdnest)   echo "39.9929 116.3966 鸟巢" ;;
+        shanghai)   echo "31.2397 121.4908 上海外滩" ;;
+        guangzhou)  echo "23.1064 113.3245 广州塔" ;;
         paris)      echo "48.8584 2.2945 巴黎埃菲尔铁塔" ;;
         newyork)    echo "40.7580 -73.9855 纽约时代广场" ;;
         tokyo)      echo "35.6586 139.7454 东京塔" ;;
         london)     echo "51.5007 -0.1246 伦敦大本钟" ;;
-        rome)       echo "41.89021 12.49223 罗马斗兽场" ;;
+        rome)       echo "41.8902 12.4922 罗马斗兽场" ;;
         *)
             eval "val=\$CUSTOM_$1"
             [ -n "$val" ] && echo "$val"
@@ -162,17 +162,17 @@ show_help() {
     echo "   sudo python3 -m pymobiledevice3 remote tunneld"
     echo ""
     echo "内置地点:"
-    echo "  tiananmen  天安门          (39.907753, 116.391205)"
-    echo "  guomao     国贸CBD         (39.90727, 116.45877)"
-    echo "  birdnest   鸟巢            (39.99287, 116.39657)"
-    echo "  shanghai   上海外滩        (31.24050, 121.48621)"
-    echo "  guangzhou  广州塔          (23.10642, 113.32452)"
+    echo "  tiananmen  天安门          (39.9075, 116.3914)"
+    echo "  guomao     国贸CBD         (39.9075, 116.4590)"
+    echo "  birdnest   鸟巢            (39.9929, 116.3966)"
+    echo "  shanghai   上海外滩        (31.2397, 121.4908)"
+    echo "  guangzhou  广州塔          (23.1064, 113.3245)"
     echo ""
     echo "  paris      巴黎埃菲尔铁塔  (48.8584, 2.2945)"
     echo "  newyork    纽约时代广场    (40.7580, -73.9855)"
     echo "  tokyo      东京塔          (35.6586, 139.7454)"
     echo "  london     伦敦大本钟      (51.5007, -0.1246)"
-    echo "  rome       罗马斗兽场      (41.89021, 12.49223)"
+    echo "  rome       罗马斗兽场      (41.8902, 12.4922)"
     if [ -f "$CONF" ] && grep -q "^CUSTOM_" "$CONF" 2>/dev/null; then
         echo ""
         echo "自定义地点:"

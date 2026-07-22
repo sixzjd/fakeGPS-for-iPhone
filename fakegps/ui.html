@@ -1455,7 +1455,7 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.2.6</div>
+        <div class="app-version">v6.2.7</div>
       </div>
     </div>
 
@@ -1628,10 +1628,39 @@ var map = L.map('map', {
   attributionControl: true
 }).setView([39.9087, 116.3975], 13);
 
-L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+// Dual tile layers: AMap (GCJ-02, China only) + OSM (WGS-84, global fallback)
+var amapLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
   subdomains: ['1','2','3','4'],
   attribution: '&copy; Amap'
-}).addTo(map);
+});
+var osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+});
+
+// True when the active tile layer uses GCJ-02 projection (AMap/China)
+var usingGcj02 = true;
+
+function isInChina(lat, lng) {
+  // Rough bounding box for mainland China
+  return lat >= 18 && lat <= 54 && lng >= 73 && lng <= 135;
+}
+
+function updateTileLayer() {
+  var center = map.getCenter();
+  var china = isInChina(center.lat, center.lng);
+  if (china && !usingGcj02) {
+    map.removeLayer(osmLayer);
+    amapLayer.addTo(map);
+    usingGcj02 = true;
+  } else if (!china && usingGcj02) {
+    map.removeLayer(amapLayer);
+    osmLayer.addTo(map);
+    usingGcj02 = false;
+  }
+}
+
+amapLayer.addTo(map);
+map.on('moveend', updateTileLayer);
 
 // Custom marker icon — same pin as the app icon, tile background cut away
 var markerIcon = L.divIcon({
@@ -1663,7 +1692,9 @@ function wgs84ToGcj02(lat, lng) {
 
 // ── Select Point ──
 function selectPoint(lat, lng) {
-  var result = gcj02ToWgs84(lat, lng);
+  // If viewing AMap (GCJ-02 tiles), convert to WGS-84 for GPS.
+  // If viewing OSM (WGS-84 tiles), coordinates are already correct.
+  var result = usingGcj02 ? gcj02ToWgs84(lat, lng) : [lat, lng];
   selectedLat = result[0]; selectedLng = result[1];
   updateCoordsDisplay();
   document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
@@ -1729,10 +1760,21 @@ function doSearch() {
     || val.match(/^(\d+\.\d+)[,\s]+(\d+\.\d+)$/);
   if (coordMatch) {
     var lat = parseFloat(coordMatch[1]), lng = parseFloat(coordMatch[2]);
-    map.setView([lat, lng], 15);
+    // User-entered coords are WGS-84; display at correct position for current tiles
+    var dispLat = lat, dispLng = lng;
+    if (usingGcj02) {
+      var g = wgs84ToGcj02(lat, lng);
+      dispLat = g[0]; dispLng = g[1];
+    }
+    map.setView([dispLat, dispLng], 15);
     if (marker) map.removeLayer(marker);
-    marker = L.marker([lat, lng], {icon: markerIcon}).addTo(map);
-    selectPoint(lat, lng);
+    marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map);
+    selectedLat = lat; selectedLng = lng;
+    updateCoordsDisplay();
+    document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
+    document.getElementById('actionBtns').style.display = 'flex';
+    document.getElementById('coordsFormat').classList.add('visible');
+    document.title = 'SELECT:' + selectedLat + ',' + selectedLng;
     hideDropdown();
     return;
   }
@@ -1748,7 +1790,7 @@ function doSearch() {
             var loc = poi.location.split(',');
             var city = poi.cityname || poi.adname || '';
             var addr = poi.address || '';
-            return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0])};
+            return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0]), gcj02: true};
           }));
         } else { showToast('Not found', 'error'); hideDropdown(); }
       })
@@ -1766,7 +1808,7 @@ function doSearch() {
     .then(function(data){
       if(data && data.length > 0){
         showDropdown(data.map(function(item){
-          return {name: item.display_name.split(',')[0], address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon)};
+          return {name: item.display_name.split(',')[0], address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon), gcj02: false};
         }));
       } else { showToast('Not found', 'error'); hideDropdown(); }
     })
@@ -1781,10 +1823,32 @@ function showDropdown(results) {
     item.className = 'search-item';
     item.innerHTML = '<div class="name">' + r.name + '</div><div class="addr">' + r.address + '</div>';
     item.onclick = function() {
-      map.setView([r.lat, r.lng], 15);
+      // Determine WGS-84 coords (for GPS) and display coords (for map marker)
+      var wgsLat, wgsLng, dispLat, dispLng;
+      if (r.gcj02) {
+        // AMap result: coords are GCJ-02
+        var w = gcj02ToWgs84(r.lat, r.lng);
+        wgsLat = w[0]; wgsLng = w[1];
+        dispLat = r.lat; dispLng = r.lng;
+      } else {
+        // Nominatim result: coords are WGS-84
+        wgsLat = r.lat; wgsLng = r.lng;
+        if (usingGcj02) {
+          var g = wgs84ToGcj02(r.lat, r.lng);
+          dispLat = g[0]; dispLng = g[1];
+        } else {
+          dispLat = r.lat; dispLng = r.lng;
+        }
+      }
+      map.setView([dispLat, dispLng], 15);
       if (marker) map.removeLayer(marker);
-      marker = L.marker([r.lat, r.lng], {icon: markerIcon}).addTo(map).bindPopup(r.name).openPopup();
-      selectPoint(r.lat, r.lng);
+      marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map).bindPopup(r.name).openPopup();
+      selectedLat = wgsLat; selectedLng = wgsLng;
+      updateCoordsDisplay();
+      document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
+      document.getElementById('actionBtns').style.display = 'flex';
+      document.getElementById('coordsFormat').classList.add('visible');
+      document.title = 'SELECT:' + selectedLat + ',' + selectedLng;
       hideDropdown();
       document.getElementById('searchInput').value = r.name;
     };
@@ -1850,16 +1914,16 @@ function showToast(msg, type) {
 
 // ── Quick Places ──
 var BUILTIN_PLACES = [
-  {emoji: '🏛', label: '天安门', lat: 39.907753, lng: 116.391205},
-  {emoji: '🏙', label: '国贸CBD', lat: 39.90727, lng: 116.45877},
-  {emoji: '🏟', label: '鸟巢', lat: 39.99287, lng: 116.39657},
-  {emoji: '🌇', label: '上海外滩', lat: 31.24050, lng: 121.48621},
-  {emoji: '🌃', label: '广州塔', lat: 23.10642, lng: 113.32452},
+  {emoji: '🏛', label: '天安门', lat: 39.9075, lng: 116.3914},
+  {emoji: '🏙', label: '国贸CBD', lat: 39.9075, lng: 116.4590},
+  {emoji: '🏟', label: '鸟巢', lat: 39.9929, lng: 116.3966},
+  {emoji: '🌇', label: '上海外滩', lat: 31.2397, lng: 121.4908},
+  {emoji: '🌃', label: '广州塔', lat: 23.1064, lng: 113.3245},
   {emoji: '🇫🇷', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
   {emoji: '🇺🇸', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
   {emoji: '🗼', label: '东京塔', lat: 35.6586, lng: 139.7454},
   {emoji: '🇬🇧', label: '伦敦大本钟', lat: 51.5007, lng: -0.1246},
-  {emoji: '🏺', label: '罗马斗兽场', lat: 41.89021, lng: 12.49223}
+  {emoji: '🏺', label: '罗马斗兽场', lat: 41.8902, lng: 12.4922}
 ];
 
 (function() {
@@ -1869,16 +1933,20 @@ var BUILTIN_PLACES = [
     btn.className = 'place-btn';
     btn.innerHTML = '<span class="emoji">' + p.emoji + '</span>' + p.label;
     btn.onclick = function() {
-      // Places store WGS-84 coords — apply directly, no GCJ-02 conversion
+      // Places store WGS-84 coords for GPS spoofing
       selectedLat = p.lat; selectedLng = p.lng;
-      document.getElementById('coordsDisplay').textContent = p.lat + ', ' + p.lng;
+      document.getElementById('coordsDisplay').textContent = p.lat.toFixed(6) + ', ' + p.lng.toFixed(6);
       document.getElementById('coordsHint').textContent = 'Setting ' + p.label + '...';
       document.getElementById('actionBtns').style.display = 'flex';
-      // Show marker at GCJ-02 position so it sits on the real landmark
-      var gcj = wgs84ToGcj02(p.lat, p.lng);
-      map.setView(gcj, 15);
+      // Display marker at correct position for the tile layer that will be active
+      var dispLat = p.lat, dispLng = p.lng;
+      if (isInChina(p.lat, p.lng)) {
+        var gcj = wgs84ToGcj02(p.lat, p.lng);
+        dispLat = gcj[0]; dispLng = gcj[1];
+      }
+      map.setView([dispLat, dispLng], 15);
       if (marker) map.removeLayer(marker);
-      marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
+      marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map);
       // Auto-apply via title bridge (Python reads SET: from title)
       document.title = 'SET:' + p.lat + ',' + p.lng;
       if (window.pywebview && window.pywebview.api) {
