@@ -1,6 +1,7 @@
 """Fail CI if the packaged Python.NET runtime lacks its public loader symbol."""
 from pathlib import Path
 import sys
+from importlib.metadata import version
 
 try:
     import clr_loader
@@ -24,4 +25,4 @@ except Exception as exc:
 
 if loader_type is None or initialize is None:
     raise SystemExit(f'{runtime} lacks Python.Runtime.Loader.Initialize; installed Python.NET is incompatible')
-print(f'Python.NET {pythonnet.__version__}; clr-loader {clr_loader.__version__}; verified {runtime}')
+print(f"pywebview {version('pywebview')}; Python.NET {version('pythonnet')}; clr-loader {version('clr-loader')}; verified {runtime}")

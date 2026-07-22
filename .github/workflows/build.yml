@@ -52,7 +52,7 @@ jobs:
       - name: Verify Python.NET runtime
         shell: pwsh
         run: |
-          python -c "import pywebview, pythonnet, clr_loader; print('pywebview', pywebview.__version__); print('pythonnet', pythonnet.__version__); print('clr-loader', clr_loader.__version__)"
+          python -c "import webview, pythonnet, clr_loader; from importlib.metadata import version; print('pywebview', version('pywebview')); print('pythonnet', version('pythonnet')); print('clr-loader', version('clr-loader'))"
           python check_pythonnet_runtime.py
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
