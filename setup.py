@@ -17,7 +17,7 @@ setup(
         "pymobiledevice3>=7.0",
     ],
     extras_require={
-        "gui": ["pywebview==5.4.1", "pythonnet==3.0.5", "clr-loader==0.2.7.post0"],
+        "gui": ["pywebview==5.4", "pythonnet==3.0.5", "clr-loader==0.2.7.post0"],
     },
     python_requires=">=3.9",
     classifiers=[

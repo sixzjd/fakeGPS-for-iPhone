@@ -1,6 +1,6 @@
 pymobiledevice3>=7.0
 
 # For GUI mode
-pywebview==5.4.1
+pywebview==5.4
 pythonnet==3.0.5
 clr-loader==0.2.7.post0
