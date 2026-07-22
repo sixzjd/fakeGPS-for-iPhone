@@ -1,4 +1,4 @@
-# FakeGPS v6.2.4 - iPhone 虚拟定位工具 | iOS GPS 模拟器
+# FakeGPS v6.2.5 - iPhone 虚拟定位工具 | iOS GPS 模拟器
 
 跨平台（macOS + Windows）iPhone 虚拟 GPS 定位工具。免越狱、无需 Xcode，通过 USB 为 iPhone 设置虚拟定位。
 
@@ -29,7 +29,7 @@
 
 不需要安装 Python 或任何依赖。
 
-> **Windows 用户注意**：下载后如果弹出 SmartScreen 警告，点"更多信息" → "仍要运行"。如果提示 `Failed to load Python DLL`，右键 zip → 属性 → 勾选"解除锁定" → 重新解压；或解压后双击文件夹里的 `解除锁定.bat` 再运行。
+> **Windows 用户注意**：FakeGPS 启动时会自动解除下载文件的锁定标记。如果弹出 SmartScreen 警告，点“更多信息” → “仍要运行”。程序启动时会请求一次管理员权限，用于 iOS 17+ 的 tunneld 隧道服务。
 
 ### 方式二：官网下载（推荐）
 

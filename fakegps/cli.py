@@ -81,7 +81,7 @@ def _do_place(name):
 
 def interactive_mode():
     """Interactive REPL mode."""
-    print("FakeGPS v6.2.4 - iPhone Virtual Location Tool")
+    print("FakeGPS v6.2.5 - iPhone Virtual Location Tool")
     print("Type 'help' for commands, 'exit' to quit.\n")
     _print_places()
     print()
@@ -202,7 +202,7 @@ Built-in places: tiananmen, guomao, birdnest, shanghai, guangzhou,
 def main():
     parser = argparse.ArgumentParser(
         prog="fakegps",
-        description="FakeGPS v6.2.4 - iPhone Virtual Location Tool (cross-platform)"
+        description="FakeGPS v6.2.5 - iPhone Virtual Location Tool (cross-platform)"
     )
     parser.add_argument("command", nargs="?", help="Place name or command (set, clear, list, places, map, play, add, remove)")
     parser.add_argument("args", nargs="*", help="Command arguments")

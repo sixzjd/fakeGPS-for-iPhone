@@ -102,6 +102,9 @@ exe = EXE(
     strip=False,
     upx=False,
     version=windows_version_file,
+    # tunneld needs administrator rights on Windows.  Elevate FakeGPS once
+    # at launch so Set Location does not invoke UAC on every retry.
+    uac_admin=is_windows,
     console=False,
     disable_windowed_traceback=False,
 )
@@ -125,7 +128,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.4',
+            'CFBundleShortVersionString': '6.2.5',
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },
