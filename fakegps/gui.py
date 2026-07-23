@@ -51,6 +51,7 @@ class API:
     def __init__(self):
         self._window = None
         self._active_sim = None
+        self._gpx_future = None
         self._ready = threading.Event()
 
     def set_window(self, window):
@@ -203,21 +204,38 @@ class API:
 
     def play_gpx(self, path, speed_kmh=5.0):
         """Play a GPX file trajectory on the device."""
-        from .core import play_gpx_file, run_async
+        from .core import play_gpx_file, run_async_cancellable
 
         def _worker():
+            import concurrent.futures
+            future = run_async_cancellable(play_gpx_file(path))
+            self._gpx_future = future
             try:
-                self._js(f"logMsg('Playing GPX: {path} @ {speed_kmh} km/h')")
-                run_async(play_gpx_file(path, speed_kmh=float(speed_kmh)))
+                self._js(f"logMsg('Playing GPX: {path} @ default speed')")
+                future.result()
                 self._js("gpxFinished()")
                 self._js("logMsg('GPX playback finished.', 'success')")
+            except concurrent.futures.CancelledError:
+                self._js("gpxFinished()")
+                self._js("logMsg('GPX playback stopped.', 'success')")
             except Exception as e:
                 _dump_traceback("play_gpx")
                 err = str(e).replace("'", "\\'")
                 self._js(f"logMsg('GPX error: {err}', 'error')")
                 self._js("gpxFinished()")
+            finally:
+                if self._gpx_future is future:
+                    self._gpx_future = None
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def stop_gpx(self):
+        """Cancel an active GPX playback immediately."""
+        future = self._gpx_future
+        if future and not future.done():
+            future.cancel()
+        else:
+            self._js("gpxFinished()")
 
     # ── AMap Key ──
 

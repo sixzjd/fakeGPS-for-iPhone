@@ -1522,15 +1522,6 @@ input[readonly] {
             <input type="text" id="gpxPath" placeholder="Select .gpx file..." readonly />
             <button class="btn btn-ghost" onclick="browseGpx()" style="white-space:nowrap">Browse</button>
           </div>
-          <div class="gpx-row" style="margin-top:8px">
-            <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Speed (no timestamps)</label>
-            <select id="gpxSpeed" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:13px">
-              <option value="5" selected>5 km/h (Walk)</option>
-              <option value="15">15 km/h (Cycle)</option>
-              <option value="40">40 km/h (Drive)</option>
-              <option value="80">80 km/h (Highway)</option>
-            </select>
-          </div>
           <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%;margin-top:8px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px">
               <polygon points="5 3 19 12 5 21 5 3"/>
@@ -1642,7 +1633,8 @@ var amapLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=z
   subdomains: ['1','2','3','4'],
   attribution: '&copy; Amap'
 });
-var osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  subdomains: ['a', 'b', 'c'],
   attribution: '&copy; OpenStreetMap contributors'
 });
 
@@ -1681,7 +1673,8 @@ amapLayer.on('tileerror', function() {
 });
 
 amapLayer.addTo(map);
-map.on('moveend', updateTileLayer);
+map.on('moveend zoomend', updateTileLayer);
+updateTileLayer();
 
 // Custom marker icon — same pin as the app icon, tile background cut away
 var markerIcon = L.divIcon({
@@ -2005,9 +1998,13 @@ function browseGpx() {
 }
 
 function playGpx() {
+  if (window._gpxPlaying) {
+    if (window.pywebview && window.pywebview.api) window.pywebview.api.stop_gpx();
+    return;
+  }
   var path = document.getElementById('gpxPath').value;
   if (!path) { showToast('Please select a GPX file first', 'error'); return; }
-  document.getElementById('playGpxBtn').disabled = true;
+  window._gpxPlaying = true;
   document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop';
   document.getElementById('gpxProgress').classList.add('visible');
   document.getElementById('gpxProgressBar').style.width = '0%';
@@ -2018,16 +2015,15 @@ function playGpx() {
     if (w < 90) bar.style.width = (w + 2) + '%';
   }, 500);
   window._gpxTimer = _gpxTimer;
-  var speed = parseFloat(document.getElementById('gpxSpeed').value) || 5;
-  logMsg('Playing GPX: ' + path + ' @ ' + speed + ' km/h');
+  logMsg('Playing GPX: ' + path + ' (speed from GPX timestamps, or default 5 km/h)');
   if (window.pywebview && window.pywebview.api) {
-    window.pywebview.api.play_gpx(path, speed);
+    window.pywebview.api.play_gpx(path);
   }
 }
 
 function gpxFinished() {
+  window._gpxPlaying = false;
   if (window._gpxTimer) { clearInterval(window._gpxTimer); window._gpxTimer = null; }
-  document.getElementById('playGpxBtn').disabled = false;
   document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play GPX';
   document.getElementById('gpxProgressBar').style.width = '100%';
   setTimeout(function() {

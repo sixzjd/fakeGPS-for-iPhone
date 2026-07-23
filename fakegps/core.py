@@ -621,3 +621,9 @@ def run_async(coro):
         loop = _get_persistent_loop()
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         return future.result()
+
+
+def run_async_cancellable(coro):
+    """Schedule a coroutine and return a future that can cancel it."""
+    loop = _get_persistent_loop()
+    return asyncio.run_coroutine_threadsafe(coro, loop)
