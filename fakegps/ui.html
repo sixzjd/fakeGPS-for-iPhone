@@ -780,11 +780,13 @@ html, body {
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
   transition: border-color 0.3s, box-shadow 0.3s;
+  outline: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
 }
 
 .search-box:focus-within {
-  border-color: var(--cyan);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 12px rgba(0,212,255,0.18);
+  border-color: var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
 }
 
 .search-box input {
@@ -800,9 +802,25 @@ html, body {
   -webkit-appearance: none;
   -webkit-focus-ring-color: transparent;
   box-shadow: none;
+  outline: 0 !important;
+  border-color: transparent !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.search-overlay,
+.search-box,
+.search-box input,
+.search-box button,
+.search-box input:focus,
+.search-box input:focus-visible,
+.search-box button:focus,
+.search-box button:focus-visible {
+  outline: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
 }
 .search-box input:focus,
-.search-box button:focus { outline: none; box-shadow: none; }
+.search-box input:focus-visible,
+.search-box button:focus,
+.search-box button:focus-visible { box-shadow: none !important; }
 .search-box input::placeholder {
   color: var(--text-muted);
   font-weight: 400;
@@ -1825,6 +1843,21 @@ function doSearch() {
     hideDropdown();
     return;
   }
+  // These common Chinese names refer to overseas landmarks. Search them
+  // globally first because AMap may return an unrelated domestic POI with
+  // the same text and prevent the global fallback from running.
+  var GLOBAL_SEARCH_ALIASES = {
+    '旧金山': 'San Francisco',
+    '三藩市': 'San Francisco',
+    '东京塔': 'Tokyo Tower',
+    '巴黎铁塔': 'Eiffel Tower, Paris',
+    '纽约时代广场': 'Times Square, New York'
+  };
+  var globalQuery = GLOBAL_SEARCH_ALIASES[val];
+  if (globalQuery) {
+    searchGlobal(val, globalQuery);
+    return;
+  }
   showToast('Searching...', 'info');
   if (AMAP_KEY) {
     var amapUrl = 'https://restapi.amap.com/v3/place/text?key=' + AMAP_KEY
@@ -1839,18 +1872,18 @@ function doSearch() {
             var addr = poi.address || '';
             return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0]), gcj02: true};
           }));
-        } else { return searchGlobal(val); }
+        } else { return searchGlobal(val, val); }
       })
-      .catch(function(){ return searchGlobal(val); });
+      .catch(function(){ return searchGlobal(val, val); });
     return;
   }
-  searchGlobal(val);
+  searchGlobal(val, val);
 }
 
 // Global fallback for places outside AMap coverage. Photon returns WGS-84
 // coordinates and is reachable from networks where Nominatim is blocked.
-function searchGlobal(val) {
-  var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(val) + '&limit=8';
+function searchGlobal(displayValue, queryValue) {
+  var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(queryValue) + '&limit=8';
   Promise.race([
     fetch(url, {headers:{'Accept':'application/json'}}),
     new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
@@ -1862,8 +1895,8 @@ function searchGlobal(val) {
           var p = item.properties || {};
           var c = [p.street, p.city, p.country].filter(Boolean).join(' · ');
           return {
-            name: p.name || p.street || p.city || val,
-            address: c || p.name || val,
+            name: p.name || p.street || p.city || displayValue,
+            address: c || p.name || displayValue,
             lat: parseFloat(item.geometry.coordinates[1]),
             lng: parseFloat(item.geometry.coordinates[0]),
             gcj02: false
