@@ -57,14 +57,21 @@ $stderr = Join-Path $logs 'stderr.log'
 $process = Start-Process -FilePath $exe -WorkingDirectory $root -PassThru `
   -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 try {
-  Start-Sleep -Seconds 10
-  if ($process.HasExited) {
-    Write-Host "FakeGPS.exe exited after $($process.ExitTime - $process.StartTime). Exit code: $($process.ExitCode)"
-    if (Test-Path $stdout) { Get-Content $stdout }
-    if (Test-Path $stderr) { Get-Content $stderr }
-    throw 'FakeGPS.exe exited during the 10-second startup smoke test'
+  # WebView2 can create the native window several seconds after the frozen
+  # process starts. Poll throughout the required 10-second smoke window so a
+  # slow hosted runner is not mistaken for a GUI startup failure.
+  $window = $null
+  for ($i = 0; $i -lt 20; $i++) {
+    Start-Sleep -Milliseconds 500
+    if ($process.HasExited) {
+      Write-Host "FakeGPS.exe exited after $($process.ExitTime - $process.StartTime). Exit code: $($process.ExitCode)"
+      if (Test-Path $stdout) { Get-Content $stdout }
+      if (Test-Path $stderr) { Get-Content $stderr }
+      throw 'FakeGPS.exe exited during the 10-second startup smoke test'
+    }
+    $window = [FakeGpsWindowProbe]::FindVisibleWindow([uint32]$process.Id)
+    if (-not [string]::IsNullOrWhiteSpace($window)) { break }
   }
-  $window = [FakeGpsWindowProbe]::FindVisibleWindow([uint32]$process.Id)
   if ([string]::IsNullOrWhiteSpace($window)) {
     if (Test-Path $stdout) { Get-Content $stdout }
     if (Test-Path $stderr) { Get-Content $stderr }
