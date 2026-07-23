@@ -1654,18 +1654,30 @@ function isInChina(lat, lng) {
   return lat >= 18 && lat <= 54 && lng >= 73 && lng <= 135;
 }
 
+function removeGlobalLayers() {
+  if (map.hasLayer(globalLayer)) map.removeLayer(globalLayer);
+  if (window._cartoLayer && map.hasLayer(window._cartoLayer)) {
+    map.removeLayer(window._cartoLayer);
+  }
+}
+
 function updateTileLayer() {
   var center = map.getCenter();
   var china = isInChina(center.lat, center.lng);
   if (china && !usingGcj02) {
-    map.removeLayer(globalLayer);
+    removeGlobalLayers();
     amapLayer.addTo(map);
     usingGcj02 = true;
   } else if (!china && usingGcj02) {
     map.removeLayer(amapLayer);
+    removeGlobalLayers();
     globalLayer.addTo(map);
     usingGcj02 = false;
   }
+  // Recalculate tile positions after switching between GCJ-02 and WGS-84
+  // layers; this prevents stale global tiles from covering AMap after a
+  // round trip from overseas back into China.
+  map.invalidateSize({pan: false});
 }
 
 // AMap is restricted to China and can also be unreachable on some networks.
