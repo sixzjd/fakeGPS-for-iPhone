@@ -7,7 +7,7 @@ setup(
     author="sixzjd",
     license="MIT",
     packages=find_packages(),
-    package_data={"fakegps": ["map.html", "ui.html"]},
+    package_data={"fakegps": ["ui.html"]},
     entry_points={
         "console_scripts": [
             "fakegps=fakegps.cli:main",
