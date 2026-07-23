@@ -784,7 +784,7 @@ html, body {
 
 .search-box:focus-within {
   border-color: var(--cyan);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 12px rgba(0,212,255,0.18);
 }
 
 .search-box input {
@@ -797,7 +797,12 @@ html, body {
   font-size: 14px;
   font-weight: 500;
   outline: none;
+  -webkit-appearance: none;
+  -webkit-focus-ring-color: transparent;
+  box-shadow: none;
 }
+.search-box input:focus,
+.search-box button:focus { outline: none; box-shadow: none; }
 .search-box input::placeholder {
   color: var(--text-muted);
   font-weight: 400;
@@ -1813,7 +1818,7 @@ function doSearch() {
     var amapUrl = 'https://restapi.amap.com/v3/place/text?key=' + AMAP_KEY
       + '&keywords=' + encodeURIComponent(val) + '&output=json&offset=10';
     fetch(amapUrl)
-      .then(function(r){return r.json();})
+      .then(function(r){if (!r.ok) throw new Error('AMap HTTP ' + r.status); return r.json();})
       .then(function(data){
         if(data.pois && data.pois.length > 0){
           showDropdown(data.pois.map(function(poi){
@@ -1822,27 +1827,39 @@ function doSearch() {
             var addr = poi.address || '';
             return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0]), gcj02: true};
           }));
-        } else { showToast('Not found', 'error'); hideDropdown(); }
+        } else { return searchGlobal(val); }
       })
-      .catch(function(){ showToast('Search failed', 'error'); hideDropdown(); });
+      .catch(function(){ return searchGlobal(val); });
     return;
   }
-  // Fallback: Nominatim
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&q='
-    + encodeURIComponent(val) + '&accept-language=zh-CN&limit=8';
+  searchGlobal(val);
+}
+
+// Global fallback for places outside AMap coverage. Photon returns WGS-84
+// coordinates and is reachable from networks where Nominatim is blocked.
+function searchGlobal(val) {
+  var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(val) + '&limit=8';
   Promise.race([
     fetch(url, {headers:{'Accept':'application/json'}}),
     new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
   ])
     .then(function(r){return r.json();})
     .then(function(data){
-      if(data && data.length > 0){
-        showDropdown(data.map(function(item){
-          return {name: item.display_name.split(',')[0], address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon), gcj02: false};
+      if(data && data.features && data.features.length > 0){
+        showDropdown(data.features.map(function(item){
+          var p = item.properties || {};
+          var c = [p.street, p.city, p.country].filter(Boolean).join(' · ');
+          return {
+            name: p.name || p.street || p.city || val,
+            address: c || p.name || val,
+            lat: parseFloat(item.geometry.coordinates[1]),
+            lng: parseFloat(item.geometry.coordinates[0]),
+            gcj02: false
+          };
         }));
       } else { showToast('Not found', 'error'); hideDropdown(); }
     })
-    .catch(function(){ showToast('Search failed. Set AMap Key for better results.', 'error'); hideDropdown(); });
+    .catch(function(){ showToast('Global search failed. Try coordinates.', 'error'); hideDropdown(); });
 }
 
 function showDropdown(results) {
