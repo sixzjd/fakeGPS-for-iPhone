@@ -1633,9 +1633,11 @@ var amapLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=z
   subdomains: ['1','2','3','4'],
   attribution: '&copy; Amap'
 });
-var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  subdomains: ['a', 'b', 'c'],
-  attribution: '&copy; OpenStreetMap contributors'
+// OSM's tile host is not reachable on some networks and can leave WebView
+// showing a blank map. ArcGIS provides a global WGS-84 street layer without
+// requiring a key, so use it for locations outside mainland China.
+var globalLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
 });
 
 // True when the active tile layer uses GCJ-02 projection (AMap/China)
@@ -1651,12 +1653,12 @@ function updateTileLayer() {
   var center = map.getCenter();
   var china = isInChina(center.lat, center.lng);
   if (china && !usingGcj02) {
-    map.removeLayer(osmLayer);
+    map.removeLayer(globalLayer);
     amapLayer.addTo(map);
     usingGcj02 = true;
   } else if (!china && usingGcj02) {
     map.removeLayer(amapLayer);
-    osmLayer.addTo(map);
+    globalLayer.addTo(map);
     usingGcj02 = false;
   }
 }
@@ -1667,9 +1669,23 @@ amapLayer.on('tileerror', function() {
   if (!amapTileFailed && !isInChina(map.getCenter().lat, map.getCenter().lng)) {
     amapTileFailed = true;
     if (map.hasLayer(amapLayer)) map.removeLayer(amapLayer);
-    if (!map.hasLayer(osmLayer)) osmLayer.addTo(map);
+    if (!map.hasLayer(globalLayer)) globalLayer.addTo(map);
     usingGcj02 = false;
   }
+});
+
+globalLayer.on('tileerror', function() {
+  // Retry through Carto if ArcGIS is temporarily unavailable. This keeps the
+  // Leaflet canvas alive instead of allowing a failed tile source to blank it.
+  if (!map.hasLayer(globalLayer)) return;
+  map.removeLayer(globalLayer);
+  if (!window._cartoLayer) {
+    window._cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    });
+  }
+  window._cartoLayer.addTo(map);
 });
 
 amapLayer.addTo(map);
