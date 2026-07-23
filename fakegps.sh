@@ -82,11 +82,11 @@ except:
 
 get_coords() {
     case "$1" in
-        tiananmen)  echo "39.9075 116.3914 天安门" ;;
-        guomao)     echo "39.9075 116.4590 国贸CBD" ;;
-        birdnest)   echo "39.9929 116.3966 鸟巢" ;;
-        shanghai)   echo "31.2397 121.4908 上海外滩" ;;
-        guangzhou)  echo "23.1064 113.3245 广州塔" ;;
+        tiananmen)  echo "39.9073 116.391215 天安门" ;;
+        guomao)     echo "39.90775 116.455672 国贸CBD" ;;
+        birdnest)   echo "39.991497 116.390159 鸟巢" ;;
+        shanghai)   echo "31.240807 121.485998 上海外滩" ;;
+        guangzhou)  echo "23.109 113.319111 广州塔" ;;
         paris)      echo "48.8584 2.2945 巴黎埃菲尔铁塔" ;;
         newyork)    echo "40.7580 -73.9855 纽约时代广场" ;;
         tokyo)      echo "35.6586 139.7454 东京塔" ;;
@@ -162,11 +162,11 @@ show_help() {
     echo "   sudo python3 -m pymobiledevice3 remote tunneld"
     echo ""
     echo "内置地点:"
-    echo "  tiananmen  天安门          (39.9075, 116.3914)"
-    echo "  guomao     国贸CBD         (39.9075, 116.4590)"
-    echo "  birdnest   鸟巢            (39.9929, 116.3966)"
-    echo "  shanghai   上海外滩        (31.2397, 121.4908)"
-    echo "  guangzhou  广州塔          (23.1064, 113.3245)"
+    echo "  tiananmen  天安门          (39.9073, 116.391215)"
+    echo "  guomao     国贸CBD         (39.90775, 116.455672)"
+    echo "  birdnest   鸟巢            (39.991497, 116.390159)"
+    echo "  shanghai   上海外滩        (31.240807, 121.485998)"
+    echo "  guangzhou  广州塔          (23.109, 113.319111)"
     echo ""
     echo "  paris      巴黎埃菲尔铁塔  (48.8584, 2.2945)"
     echo "  newyork    纽约时代广场    (40.7580, -73.9855)"

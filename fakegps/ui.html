@@ -1455,7 +1455,7 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.2.7</div>
+        <div class="app-version">v6.2.2</div>
       </div>
     </div>
 
@@ -1609,7 +1609,7 @@ function showLocationActive(lat, lng) {
   document.getElementById('coordsFormat').classList.add('visible');
   // Tiles are GCJ-02: display the active point at its converted position so
   // applying the spoof never yanks the view sideways by the coord offset.
-  var gcj = wgs84ToGcj02(lat, lng);
+  var gcj = isInChina(lat, lng) ? wgs84ToGcj02(lat, lng) : [lat, lng];
   if (marker) map.removeLayer(marker);
   marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
   map.flyTo(gcj, Math.max(map.getZoom(), 15), {duration: 0.8});
@@ -1648,6 +1648,7 @@ var osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // True when the active tile layer uses GCJ-02 projection (AMap/China)
 var usingGcj02 = true;
+var amapTileFailed = false;
 
 function isInChina(lat, lng) {
   // Rough bounding box for mainland China
@@ -1667,6 +1668,17 @@ function updateTileLayer() {
     usingGcj02 = false;
   }
 }
+
+// AMap is restricted to China and can also be unreachable on some networks.
+// Fall back to global OSM tiles instead of leaving a blank map.
+amapLayer.on('tileerror', function() {
+  if (!amapTileFailed && !isInChina(map.getCenter().lat, map.getCenter().lng)) {
+    amapTileFailed = true;
+    if (map.hasLayer(amapLayer)) map.removeLayer(amapLayer);
+    if (!map.hasLayer(osmLayer)) osmLayer.addTo(map);
+    usingGcj02 = false;
+  }
+});
 
 amapLayer.addTo(map);
 map.on('moveend', updateTileLayer);
@@ -1923,11 +1935,11 @@ function showToast(msg, type) {
 
 // ── Quick Places ──
 var BUILTIN_PLACES = [
-  {emoji: '🏛', label: '天安门', lat: 39.9075, lng: 116.3914},
-  {emoji: '🏙', label: '国贸CBD', lat: 39.9075, lng: 116.4590},
-  {emoji: '🏟', label: '鸟巢', lat: 39.9929, lng: 116.3966},
-  {emoji: '🌇', label: '上海外滩', lat: 31.2397, lng: 121.4908},
-  {emoji: '🌃', label: '广州塔', lat: 23.1064, lng: 113.3245},
+  {emoji: '🏛', label: '天安门', lat: 39.9073, lng: 116.391215},
+  {emoji: '🏙', label: '国贸CBD', lat: 39.90775, lng: 116.455672},
+  {emoji: '🏟', label: '鸟巢', lat: 39.991497, lng: 116.390159},
+  {emoji: '🌇', label: '上海外滩', lat: 31.240807, lng: 121.485998},
+  {emoji: '🌃', label: '广州塔', lat: 23.109, lng: 113.319111},
   {emoji: '🇫🇷', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
   {emoji: '🇺🇸', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
   {emoji: '🗼', label: '东京塔', lat: 35.6586, lng: 139.7454},

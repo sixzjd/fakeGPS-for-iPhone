@@ -486,7 +486,13 @@ async def play_gpx_file(filepath, serial=None, speed_kmh=5.0):
     from .gpx import parse_gpx
 
     points = parse_gpx(filepath)
+    if not points:
+        raise ValueError(f"GPX file contains no track points: {filepath}")
     has_time = any(p[3] for p in points)  # p[3] is time_str
+
+    speed_kmh = float(speed_kmh)
+    if not has_time and speed_kmh <= 0:
+        raise ValueError("GPX playback speed must be greater than 0 km/h")
 
     major, udid = await _get_device_session_context(serial)
 
