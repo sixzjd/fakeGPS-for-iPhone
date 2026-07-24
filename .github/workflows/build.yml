@@ -32,6 +32,27 @@ jobs:
           cp -R dist/FakeGPS.app dist/dmg-root/FakeGPS.app
           ln -s /Applications dist/dmg-root/Applications
           hdiutil create -volname FakeGPS -srcfolder dist/dmg-root -ov -format UDZO -o dist/FakeGPS-macOS.dmg
+      - name: Test macOS DMG and app startup
+        run: |
+          test -x dist/FakeGPS.app/Contents/MacOS/FakeGPS
+          mkdir -p "$RUNNER_TEMP/fakegps-dmg"
+          hdiutil attach dist/FakeGPS-macOS.dmg -nobrowse -readonly -mountpoint "$RUNNER_TEMP/fakegps-dmg"
+          test -d "$RUNNER_TEMP/fakegps-dmg/FakeGPS.app"
+          open "$RUNNER_TEMP/fakegps-dmg/FakeGPS.app"
+          app_pid=""
+          for i in {1..10}; do
+            app_pid=$(pgrep -f "$RUNNER_TEMP/fakegps-dmg/FakeGPS.app/Contents/MacOS/FakeGPS" || true)
+            test -n "$app_pid" && break
+            sleep 1
+          done
+          if test -z "$app_pid"; then
+            hdiutil detach "$RUNNER_TEMP/fakegps-dmg" || true
+            echo 'FakeGPS.app did not remain running after launch'
+            exit 1
+          fi
+          echo "FakeGPS.app started with PID $app_pid"
+          kill "$app_pid" || true
+          hdiutil detach "$RUNNER_TEMP/fakegps-dmg"
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
