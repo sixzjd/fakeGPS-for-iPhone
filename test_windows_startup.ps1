@@ -1,3 +1,7 @@
+param(
+  [string]$Root = (Join-Path $PSScriptRoot 'dist\FakeGPS')
+)
+
 $ErrorActionPreference = 'Stop'
 
 Add-Type @'
@@ -30,7 +34,7 @@ public static class FakeGpsWindowProbe {
 }
 '@
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot 'dist\FakeGPS')).Path
+$root = (Resolve-Path $Root).Path
 $exe = Join-Path $root 'FakeGPS.exe'
 $runtimeDll = Join-Path $root '_internal\pythonnet\runtime\Python.Runtime.dll'
 $logs = Join-Path $root 'startup-test'
