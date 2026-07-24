@@ -1031,6 +1031,27 @@ html, body {
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
+.version-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.update-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--cyan);
+  background: rgba(121,226,161,.12);
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+.update-btn:hover { color: #fff; background: rgba(121,226,161,.28); transform: translateY(1px); }
+.update-btn:disabled { opacity: .55; cursor: wait; }
+.update-btn[hidden] { display: none; }
+.update-btn.updating svg { animation: update-bounce 1s ease-in-out infinite; }
+@keyframes update-bounce { 50% { transform: translateY(3px); } }
 
 .sidebar-content {
   flex: 1;
@@ -1478,7 +1499,14 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.2.2</div>
+        <div class="version-row">
+          <div class="app-version">v6.2.2</div>
+          <button id="updateBtn" class="update-btn" hidden title="Download update" aria-label="Download update" onclick="startUpdate()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 4v13"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2215,8 +2243,39 @@ window.addEventListener('pywebviewready', function() {
       if (key) setAmapKey(key);
     });
   }
+  if (window.pywebview.api.check_for_update) {
+    window.pywebview.api.check_for_update().then(function(info) {
+      if (info && info.available) {
+        var btn = document.getElementById('updateBtn');
+        btn.hidden = false;
+        btn.title = 'Update to v' + info.version;
+        btn.setAttribute('aria-label', 'Update to v' + info.version);
+        window._fakegpsUpdate = info;
+      }
+    }).catch(function() {});
+  }
   refreshDevices();
 });
+
+function startUpdate() {
+  var btn = document.getElementById('updateBtn');
+  btn.disabled = true;
+  btn.classList.add('updating');
+  showToast('Downloading update...', 'info');
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.update_app) {
+    window.pywebview.api.update_app().then(function(result) {
+      if (!result || !result.ok) {
+        btn.disabled = false;
+        btn.classList.remove('updating');
+        showToast((result && result.error) || 'Update failed', 'error');
+      }
+    }).catch(function() {
+      btn.disabled = false;
+      btn.classList.remove('updating');
+      showToast('Update failed', 'error');
+    });
+  }
+}
 
 // ── Legacy document.title bridge (fallback for non-pywebview mode) ──
 (function pollTitle() {
