@@ -31,7 +31,7 @@
 
 ### 方式二：官网下载（推荐）
 
-前往 [www.sixzjd.sbs](https://www.sixzjd.sbs) 下载 macOS 或 Windows 版本。
+前往 [fakegps.sixzjd.sbs](https://fakegps.sixzjd.sbs) 下载 macOS 或 Windows 版本。
 
 ### 方式三：npm（macOS CLI 模式）
 
