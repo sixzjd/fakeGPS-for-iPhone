@@ -4,6 +4,8 @@ __pycache__/
 *.pyd
 .DS_Store
 AGENTS.md
+.workbuddy-ai/
+.wrangler/
 *.egg-info/
 dist/
 build/

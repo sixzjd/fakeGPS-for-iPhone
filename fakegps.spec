@@ -7,6 +7,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 block_cipher = None
 src_root = Path(SPECPATH)
 
+sys.path.insert(0, str(src_root))
+from fakegps import __version__ as APP_VERSION
+
 # Keep Windows builds compatible with enterprise code-integrity policies.
 # UPX-compressed binaries and stripped PE files are more likely to be treated
 # as untrusted, and can prevent Python's runtime DLL from loading.
@@ -140,7 +143,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.2',
+            'CFBundleShortVersionString': APP_VERSION,
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

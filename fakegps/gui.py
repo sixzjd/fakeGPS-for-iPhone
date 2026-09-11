@@ -400,10 +400,10 @@ def main():
 
     api = API()
     html_path = _resource_path("ui.html")
-    html_content = html_path.read_text(encoding="utf-8")
+    html_content = html_path.read_text(encoding="utf-8").replace("__VERSION__", __version__)
 
     window = webview.create_window(
-        title="FakeGPS v6.2.2",
+        title=f"FakeGPS v{__version__}",
         html=html_content,
         js_api=api,
         width=1280,
