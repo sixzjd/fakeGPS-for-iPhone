@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- FakeGPS app icon — matches the in-app sidebar logo: white tile + stroke pin -->
-  <rect width="1024" height="1024" rx="224" fill="#ffffff"/>
-  <rect x="3" y="3" width="1018" height="1018" rx="221" fill="none" stroke="#0b0b0b" stroke-opacity="0.08" stroke-width="6"/>
-  <g transform="translate(176,176) scale(28)" fill="none" stroke="#0b0b0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-    <circle cx="12" cy="10" r="3"/>
-  </g>
-</svg>

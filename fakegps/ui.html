@@ -780,11 +780,13 @@ html, body {
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
   transition: border-color 0.3s, box-shadow 0.3s;
+  outline: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
 }
 
 .search-box:focus-within {
-  border-color: var(--cyan);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.15);
+  border-color: var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
 }
 
 .search-box input {
@@ -797,7 +799,28 @@ html, body {
   font-size: 14px;
   font-weight: 500;
   outline: none;
+  -webkit-appearance: none;
+  -webkit-focus-ring-color: transparent;
+  box-shadow: none;
+  outline: 0 !important;
+  border-color: transparent !important;
+  -webkit-tap-highlight-color: transparent;
 }
+.search-overlay,
+.search-box,
+.search-box input,
+.search-box button,
+.search-box input:focus,
+.search-box input:focus-visible,
+.search-box button:focus,
+.search-box button:focus-visible {
+  outline: 0 !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+.search-box input:focus,
+.search-box input:focus-visible,
+.search-box button:focus,
+.search-box button:focus-visible { box-shadow: none !important; }
 .search-box input::placeholder {
   color: var(--text-muted);
   font-weight: 400;
@@ -1008,6 +1031,27 @@ html, body {
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
+.version-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.update-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--cyan);
+  background: rgba(121,226,161,.12);
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+.update-btn:hover { color: #fff; background: rgba(121,226,161,.28); transform: translateY(1px); }
+.update-btn:disabled { opacity: .55; cursor: wait; }
+.update-btn[hidden] { display: none; }
+.update-btn.updating svg { animation: update-bounce 1s ease-in-out infinite; }
+@keyframes update-bounce { 50% { transform: translateY(3px); } }
 
 .sidebar-content {
   flex: 1;
@@ -1455,7 +1499,14 @@ input[readonly] {
       </div>
       <div>
         <div class="app-title">FAKEGPS</div>
-        <div class="app-version">v6.2.2</div>
+        <div class="version-row">
+          <div class="app-version">v__VERSION__</div>
+          <button id="updateBtn" class="update-btn" hidden title="Download update" aria-label="Download update" onclick="startUpdate()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 4v13"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1522,7 +1573,7 @@ input[readonly] {
             <input type="text" id="gpxPath" placeholder="Select .gpx file..." readonly />
             <button class="btn btn-ghost" onclick="browseGpx()" style="white-space:nowrap">Browse</button>
           </div>
-          <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%">
+          <button class="btn btn-primary" id="playGpxBtn" onclick="playGpx()" style="width:100%;margin-top:8px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
@@ -1600,7 +1651,7 @@ function showLocationActive(lat, lng) {
   document.getElementById('coordsFormat').classList.add('visible');
   // Tiles are GCJ-02: display the active point at its converted position so
   // applying the spoof never yanks the view sideways by the coord offset.
-  var gcj = wgs84ToGcj02(lat, lng);
+  var gcj = isInChina(lat, lng) ? wgs84ToGcj02(lat, lng) : [lat, lng];
   if (marker) map.removeLayer(marker);
   marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
   map.flyTo(gcj, Math.max(map.getZoom(), 15), {duration: 0.8});
@@ -1628,10 +1679,81 @@ var map = L.map('map', {
   attributionControl: true
 }).setView([39.9087, 116.3975], 13);
 
-L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+// Dual tile layers: AMap (GCJ-02, China only) + OSM (WGS-84, global fallback)
+var amapLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
   subdomains: ['1','2','3','4'],
   attribution: '&copy; Amap'
-}).addTo(map);
+});
+// OSM's tile host is not reachable on some networks and can leave WebView
+// showing a blank map. ArcGIS provides a global WGS-84 street layer without
+// requiring a key, so use it for locations outside mainland China.
+var globalLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
+});
+
+// True when the active tile layer uses GCJ-02 projection (AMap/China)
+var usingGcj02 = true;
+var amapTileFailed = false;
+
+function isInChina(lat, lng) {
+  // Rough bounding box for mainland China
+  return lat >= 18 && lat <= 54 && lng >= 73 && lng <= 135;
+}
+
+function removeGlobalLayers() {
+  if (map.hasLayer(globalLayer)) map.removeLayer(globalLayer);
+  if (window._cartoLayer && map.hasLayer(window._cartoLayer)) {
+    map.removeLayer(window._cartoLayer);
+  }
+}
+
+function updateTileLayer() {
+  var center = map.getCenter();
+  var china = isInChina(center.lat, center.lng);
+  if (china && !usingGcj02) {
+    removeGlobalLayers();
+    amapLayer.addTo(map);
+    usingGcj02 = true;
+  } else if (!china && usingGcj02) {
+    map.removeLayer(amapLayer);
+    removeGlobalLayers();
+    globalLayer.addTo(map);
+    usingGcj02 = false;
+  }
+  // Recalculate tile positions after switching between GCJ-02 and WGS-84
+  // layers; this prevents stale global tiles from covering AMap after a
+  // round trip from overseas back into China.
+  map.invalidateSize({pan: false});
+}
+
+// AMap is restricted to China and can also be unreachable on some networks.
+// Fall back to global OSM tiles instead of leaving a blank map.
+amapLayer.on('tileerror', function() {
+  if (!amapTileFailed && !isInChina(map.getCenter().lat, map.getCenter().lng)) {
+    amapTileFailed = true;
+    if (map.hasLayer(amapLayer)) map.removeLayer(amapLayer);
+    if (!map.hasLayer(globalLayer)) globalLayer.addTo(map);
+    usingGcj02 = false;
+  }
+});
+
+globalLayer.on('tileerror', function() {
+  // Retry through Carto if ArcGIS is temporarily unavailable. This keeps the
+  // Leaflet canvas alive instead of allowing a failed tile source to blank it.
+  if (!map.hasLayer(globalLayer)) return;
+  map.removeLayer(globalLayer);
+  if (!window._cartoLayer) {
+    window._cartoLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    });
+  }
+  window._cartoLayer.addTo(map);
+});
+
+amapLayer.addTo(map);
+map.on('moveend zoomend', updateTileLayer);
+updateTileLayer();
 
 // Custom marker icon — same pin as the app icon, tile background cut away
 var markerIcon = L.divIcon({
@@ -1663,7 +1785,9 @@ function wgs84ToGcj02(lat, lng) {
 
 // ── Select Point ──
 function selectPoint(lat, lng) {
-  var result = gcj02ToWgs84(lat, lng);
+  // If viewing AMap (GCJ-02 tiles), convert to WGS-84 for GPS.
+  // If viewing OSM (WGS-84 tiles), coordinates are already correct.
+  var result = usingGcj02 ? gcj02ToWgs84(lat, lng) : [lat, lng];
   selectedLat = result[0]; selectedLng = result[1];
   updateCoordsDisplay();
   document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
@@ -1729,11 +1853,37 @@ function doSearch() {
     || val.match(/^(\d+\.\d+)[,\s]+(\d+\.\d+)$/);
   if (coordMatch) {
     var lat = parseFloat(coordMatch[1]), lng = parseFloat(coordMatch[2]);
-    map.setView([lat, lng], 15);
+    // User-entered coords are WGS-84; display at correct position for current tiles
+    var dispLat = lat, dispLng = lng;
+    if (usingGcj02) {
+      var g = wgs84ToGcj02(lat, lng);
+      dispLat = g[0]; dispLng = g[1];
+    }
+    map.setView([dispLat, dispLng], 15);
     if (marker) map.removeLayer(marker);
-    marker = L.marker([lat, lng], {icon: markerIcon}).addTo(map);
-    selectPoint(lat, lng);
+    marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map);
+    selectedLat = lat; selectedLng = lng;
+    updateCoordsDisplay();
+    document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
+    document.getElementById('actionBtns').style.display = 'flex';
+    document.getElementById('coordsFormat').classList.add('visible');
+    document.title = 'SELECT:' + selectedLat + ',' + selectedLng;
     hideDropdown();
+    return;
+  }
+  // These common Chinese names refer to overseas landmarks. Search them
+  // globally first because AMap may return an unrelated domestic POI with
+  // the same text and prevent the global fallback from running.
+  var GLOBAL_SEARCH_ALIASES = {
+    '旧金山': 'San Francisco',
+    '三藩市': 'San Francisco',
+    '东京塔': 'Tokyo Tower',
+    '巴黎铁塔': 'Eiffel Tower, Paris',
+    '纽约时代广场': 'Times Square, New York'
+  };
+  var globalQuery = GLOBAL_SEARCH_ALIASES[val];
+  if (globalQuery) {
+    searchGlobal(val, globalQuery);
     return;
   }
   showToast('Searching...', 'info');
@@ -1741,36 +1891,48 @@ function doSearch() {
     var amapUrl = 'https://restapi.amap.com/v3/place/text?key=' + AMAP_KEY
       + '&keywords=' + encodeURIComponent(val) + '&output=json&offset=10';
     fetch(amapUrl)
-      .then(function(r){return r.json();})
+      .then(function(r){if (!r.ok) throw new Error('AMap HTTP ' + r.status); return r.json();})
       .then(function(data){
         if(data.pois && data.pois.length > 0){
           showDropdown(data.pois.map(function(poi){
             var loc = poi.location.split(',');
             var city = poi.cityname || poi.adname || '';
             var addr = poi.address || '';
-            return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0])};
+            return {name: poi.name, address: city + (addr ? ' · ' + addr : ''), lat: parseFloat(loc[1]), lng: parseFloat(loc[0]), gcj02: true};
           }));
-        } else { showToast('Not found', 'error'); hideDropdown(); }
+        } else { return searchGlobal(val, val); }
       })
-      .catch(function(){ showToast('Search failed', 'error'); hideDropdown(); });
+      .catch(function(){ return searchGlobal(val, val); });
     return;
   }
-  // Fallback: Nominatim
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&q='
-    + encodeURIComponent(val) + '&accept-language=zh-CN&limit=8';
+  searchGlobal(val, val);
+}
+
+// Global fallback for places outside AMap coverage. Photon returns WGS-84
+// coordinates and is reachable from networks where Nominatim is blocked.
+function searchGlobal(displayValue, queryValue) {
+  var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(queryValue) + '&limit=8';
   Promise.race([
     fetch(url, {headers:{'Accept':'application/json'}}),
     new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
   ])
     .then(function(r){return r.json();})
     .then(function(data){
-      if(data && data.length > 0){
-        showDropdown(data.map(function(item){
-          return {name: item.display_name.split(',')[0], address: item.display_name, lat: parseFloat(item.lat), lng: parseFloat(item.lon)};
+      if(data && data.features && data.features.length > 0){
+        showDropdown(data.features.map(function(item){
+          var p = item.properties || {};
+          var c = [p.street, p.city, p.country].filter(Boolean).join(' · ');
+          return {
+            name: p.name || p.street || p.city || displayValue,
+            address: c || p.name || displayValue,
+            lat: parseFloat(item.geometry.coordinates[1]),
+            lng: parseFloat(item.geometry.coordinates[0]),
+            gcj02: false
+          };
         }));
       } else { showToast('Not found', 'error'); hideDropdown(); }
     })
-    .catch(function(){ showToast('Search failed. Set AMap Key for better results.', 'error'); hideDropdown(); });
+    .catch(function(){ showToast('Global search failed. Try coordinates.', 'error'); hideDropdown(); });
 }
 
 function showDropdown(results) {
@@ -1781,10 +1943,32 @@ function showDropdown(results) {
     item.className = 'search-item';
     item.innerHTML = '<div class="name">' + r.name + '</div><div class="addr">' + r.address + '</div>';
     item.onclick = function() {
-      map.setView([r.lat, r.lng], 15);
+      // Determine WGS-84 coords (for GPS) and display coords (for map marker)
+      var wgsLat, wgsLng, dispLat, dispLng;
+      if (r.gcj02) {
+        // AMap result: coords are GCJ-02
+        var w = gcj02ToWgs84(r.lat, r.lng);
+        wgsLat = w[0]; wgsLng = w[1];
+        dispLat = r.lat; dispLng = r.lng;
+      } else {
+        // Nominatim result: coords are WGS-84
+        wgsLat = r.lat; wgsLng = r.lng;
+        if (usingGcj02) {
+          var g = wgs84ToGcj02(r.lat, r.lng);
+          dispLat = g[0]; dispLng = g[1];
+        } else {
+          dispLat = r.lat; dispLng = r.lng;
+        }
+      }
+      map.setView([dispLat, dispLng], 15);
       if (marker) map.removeLayer(marker);
-      marker = L.marker([r.lat, r.lng], {icon: markerIcon}).addTo(map).bindPopup(r.name).openPopup();
-      selectPoint(r.lat, r.lng);
+      marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map).bindPopup(r.name).openPopup();
+      selectedLat = wgsLat; selectedLng = wgsLng;
+      updateCoordsDisplay();
+      document.getElementById('coordsHint').textContent = 'Click "Set Location" to apply';
+      document.getElementById('actionBtns').style.display = 'flex';
+      document.getElementById('coordsFormat').classList.add('visible');
+      document.title = 'SELECT:' + selectedLat + ',' + selectedLng;
       hideDropdown();
       document.getElementById('searchInput').value = r.name;
     };
@@ -1850,16 +2034,16 @@ function showToast(msg, type) {
 
 // ── Quick Places ──
 var BUILTIN_PLACES = [
-  {emoji: '🏛', label: '天安门', lat: 39.907753, lng: 116.391205},
-  {emoji: '🏙', label: '国贸CBD', lat: 39.90727, lng: 116.45877},
-  {emoji: '🏟', label: '鸟巢', lat: 39.99287, lng: 116.39657},
-  {emoji: '🌇', label: '上海外滩', lat: 31.24050, lng: 121.48621},
-  {emoji: '🌃', label: '广州塔', lat: 23.10642, lng: 113.32452},
+  {emoji: '🏛', label: '天安门', lat: 39.9073, lng: 116.391215},
+  {emoji: '🏙', label: '国贸CBD', lat: 39.90775, lng: 116.455672},
+  {emoji: '🏟', label: '鸟巢', lat: 39.991497, lng: 116.390159},
+  {emoji: '🌇', label: '上海外滩', lat: 31.240807, lng: 121.485998},
+  {emoji: '🌃', label: '广州塔', lat: 23.109, lng: 113.319111},
   {emoji: '🇫🇷', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
   {emoji: '🇺🇸', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
   {emoji: '🗼', label: '东京塔', lat: 35.6586, lng: 139.7454},
   {emoji: '🇬🇧', label: '伦敦大本钟', lat: 51.5007, lng: -0.1246},
-  {emoji: '🏺', label: '罗马斗兽场', lat: 41.89021, lng: 12.49223}
+  {emoji: '🏺', label: '罗马斗兽场', lat: 41.8902, lng: 12.4922}
 ];
 
 (function() {
@@ -1869,16 +2053,20 @@ var BUILTIN_PLACES = [
     btn.className = 'place-btn';
     btn.innerHTML = '<span class="emoji">' + p.emoji + '</span>' + p.label;
     btn.onclick = function() {
-      // Places store WGS-84 coords — apply directly, no GCJ-02 conversion
+      // Places store WGS-84 coords for GPS spoofing
       selectedLat = p.lat; selectedLng = p.lng;
-      document.getElementById('coordsDisplay').textContent = p.lat + ', ' + p.lng;
+      document.getElementById('coordsDisplay').textContent = p.lat.toFixed(6) + ', ' + p.lng.toFixed(6);
       document.getElementById('coordsHint').textContent = 'Setting ' + p.label + '...';
       document.getElementById('actionBtns').style.display = 'flex';
-      // Show marker at GCJ-02 position so it sits on the real landmark
-      var gcj = wgs84ToGcj02(p.lat, p.lng);
-      map.setView(gcj, 15);
+      // Display marker at correct position for the tile layer that will be active
+      var dispLat = p.lat, dispLng = p.lng;
+      if (isInChina(p.lat, p.lng)) {
+        var gcj = wgs84ToGcj02(p.lat, p.lng);
+        dispLat = gcj[0]; dispLng = gcj[1];
+      }
+      map.setView([dispLat, dispLng], 15);
       if (marker) map.removeLayer(marker);
-      marker = L.marker(gcj, {icon: markerIcon}).addTo(map);
+      marker = L.marker([dispLat, dispLng], {icon: markerIcon}).addTo(map);
       // Auto-apply via title bridge (Python reads SET: from title)
       document.title = 'SET:' + p.lat + ',' + p.lng;
       if (window.pywebview && window.pywebview.api) {
@@ -1916,9 +2104,13 @@ function browseGpx() {
 }
 
 function playGpx() {
+  if (window._gpxPlaying) {
+    if (window.pywebview && window.pywebview.api) window.pywebview.api.stop_gpx();
+    return;
+  }
   var path = document.getElementById('gpxPath').value;
   if (!path) { showToast('Please select a GPX file first', 'error'); return; }
-  document.getElementById('playGpxBtn').disabled = true;
+  window._gpxPlaying = true;
   document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop';
   document.getElementById('gpxProgress').classList.add('visible');
   document.getElementById('gpxProgressBar').style.width = '0%';
@@ -1929,15 +2121,15 @@ function playGpx() {
     if (w < 90) bar.style.width = (w + 2) + '%';
   }, 500);
   window._gpxTimer = _gpxTimer;
-  logMsg('Playing GPX: ' + path);
+  logMsg('Playing GPX: ' + path + ' (speed from GPX timestamps, or default 5 km/h)');
   if (window.pywebview && window.pywebview.api) {
     window.pywebview.api.play_gpx(path);
   }
 }
 
 function gpxFinished() {
+  window._gpxPlaying = false;
   if (window._gpxTimer) { clearInterval(window._gpxTimer); window._gpxTimer = null; }
-  document.getElementById('playGpxBtn').disabled = false;
   document.getElementById('playGpxBtn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:4px"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play GPX';
   document.getElementById('gpxProgressBar').style.width = '100%';
   setTimeout(function() {
@@ -2051,8 +2243,39 @@ window.addEventListener('pywebviewready', function() {
       if (key) setAmapKey(key);
     });
   }
+  if (window.pywebview.api.check_for_update) {
+    window.pywebview.api.check_for_update().then(function(info) {
+      if (info && info.available) {
+        var btn = document.getElementById('updateBtn');
+        btn.hidden = false;
+        btn.title = 'Update to v' + info.version;
+        btn.setAttribute('aria-label', 'Update to v' + info.version);
+        window._fakegpsUpdate = info;
+      }
+    }).catch(function() {});
+  }
   refreshDevices();
 });
+
+function startUpdate() {
+  var btn = document.getElementById('updateBtn');
+  btn.disabled = true;
+  btn.classList.add('updating');
+  showToast('Downloading update...', 'info');
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.update_app) {
+    window.pywebview.api.update_app().then(function(result) {
+      if (!result || !result.ok) {
+        btn.disabled = false;
+        btn.classList.remove('updating');
+        showToast((result && result.error) || 'Update failed', 'error');
+      }
+    }).catch(function() {
+      btn.disabled = false;
+      btn.classList.remove('updating');
+      showToast('Update failed', 'error');
+    });
+  }
+}
 
 // ── Legacy document.title bridge (fallback for non-pywebview mode) ──
 (function pollTitle() {

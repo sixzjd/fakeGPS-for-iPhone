@@ -1,9 +1,41 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
+import glob
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 block_cipher = None
 src_root = Path(SPECPATH)
+
+sys.path.insert(0, str(src_root))
+from fakegps import __version__ as APP_VERSION
+
+# Keep Windows builds compatible with enterprise code-integrity policies.
+# UPX-compressed binaries and stripped PE files are more likely to be treated
+# as untrusted, and can prevent Python's runtime DLL from loading.
+is_windows = sys.platform == 'win32'
+windows_version_file = str(src_root / 'windows_version_info.txt') if is_windows else None
+
+# pywebview's Windows backend uses pythonnet.  Collect the package as a whole
+# so PyInstaller cannot silently mix a loader from one release with a runtime
+# DLL from another release.
+PYTHONNET_HIDDENIMPORTS = collect_submodules('pythonnet') + collect_submodules('clr_loader')
+PYTHONNET_DATAS = collect_data_files('pythonnet') + collect_data_files('clr_loader')
+PYTHONNET_BINARIES = collect_dynamic_libs('pythonnet') + collect_dynamic_libs('clr_loader')
+for runtime_dll in glob.glob(str(Path(sys.prefix) / 'Lib' / 'site-packages' / 'pythonnet' / 'runtime' / '*.dll')):
+    PYTHONNET_BINARIES.append((runtime_dll, 'pythonnet/runtime'))
+
+# pytun_pmd3 ships wintun DLLs that ctypes loads at runtime.
+# PyInstaller cannot detect this because the path is built dynamically.
+PYTUN_DATAS = []
+try:
+    import pytun_pmd3
+    _pytun_root = Path(pytun_pmd3.__file__).parent
+    for dll in (_pytun_root / 'wintun').rglob('*.dll'):
+        rel = dll.relative_to(_pytun_root)
+        PYTUN_DATAS.append((str(dll), str(Path('pytun_pmd3') / rel.parent)))
+except ImportError:
+    pass
 
 # ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
@@ -33,10 +65,9 @@ EXCLUDED_MODULES = [
 a = Analysis(
     [str(src_root / 'run_gui.py')],
     pathex=[str(src_root)],
-    binaries=[],
     datas=[
         (str(src_root / 'fakegps' / 'ui.html'), 'fakegps'),
-    ],
+    ] + PYTHONNET_DATAS + PYTUN_DATAS,
     hiddenimports=[
         'pymobiledevice3',
         'pymobiledevice3.usbmux',
@@ -53,7 +84,8 @@ a = Analysis(
         'webview.platforms.edgechromium',
         'webview.platforms.winforms',
         'webview.util',
-    ],
+    ] + PYTHONNET_HIDDENIMPORTS,
+    binaries=PYTHONNET_BINARIES,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[str(src_root / 'hook_stub_modules.py')],
@@ -82,8 +114,12 @@ exe = EXE(
     icon=app_icon,
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
-    upx=True,
+    strip=False,
+    upx=False,
+    version=windows_version_file,
+    # tunneld needs administrator rights on Windows.  Elevate FakeGPS once
+    # at launch so Set Location does not invoke UAC on every retry.
+    uac_admin=is_windows,
     console=False,
     disable_windowed_traceback=False,
 )
@@ -93,8 +129,8 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=True,
-    upx=True,
+    strip=False,
+    upx=False,
     upx_exclude=[],
     name='FakeGPS',
 )
@@ -107,7 +143,7 @@ if sys.platform == 'darwin':
         icon=str(src_root / 'icon.icns'),
         bundle_identifier='com.sixzjd.fakegps',
         info_plist={
-            'CFBundleShortVersionString': '6.2.2',
+            'CFBundleShortVersionString': APP_VERSION,
             'CFBundleName': 'FakeGPS',
             'NSHighResolutionCapable': True,
         },

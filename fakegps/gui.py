@@ -10,7 +10,17 @@ import os
 import json
 import time
 import threading
+import tempfile
+import subprocess
+import urllib.request
+import urllib.error
+import shlex
 from pathlib import Path
+
+from . import __version__
+
+
+_LATEST_RELEASE_URL = "https://api.github.com/repos/sixzjd/fakeGPS-for-iPhone/releases/latest"
 
 
 def _resource_path(relative_path):
@@ -51,6 +61,7 @@ class API:
     def __init__(self):
         self._window = None
         self._active_sim = None
+        self._gpx_future = None
         self._ready = threading.Event()
 
     def set_window(self, window):
@@ -201,23 +212,40 @@ class API:
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def play_gpx(self, path):
+    def play_gpx(self, path, speed_kmh=5.0):
         """Play a GPX file trajectory on the device."""
-        from .core import play_gpx_file, run_async
+        from .core import play_gpx_file, run_async_cancellable
 
         def _worker():
+            import concurrent.futures
+            future = run_async_cancellable(play_gpx_file(path))
+            self._gpx_future = future
             try:
-                self._js(f"logMsg('Playing GPX: {path}')")
-                run_async(play_gpx_file(path))
+                self._js(f"logMsg('Playing GPX: {path} @ default speed')")
+                future.result()
                 self._js("gpxFinished()")
                 self._js("logMsg('GPX playback finished.', 'success')")
+            except concurrent.futures.CancelledError:
+                self._js("gpxFinished()")
+                self._js("logMsg('GPX playback stopped.', 'success')")
             except Exception as e:
                 _dump_traceback("play_gpx")
                 err = str(e).replace("'", "\\'")
                 self._js(f"logMsg('GPX error: {err}', 'error')")
                 self._js("gpxFinished()")
+            finally:
+                if self._gpx_future is future:
+                    self._gpx_future = None
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def stop_gpx(self):
+        """Cancel an active GPX playback immediately."""
+        future = self._gpx_future
+        if future and not future.done():
+            future.cancel()
+        else:
+            self._js("gpxFinished()")
 
     # ── AMap Key ──
 
@@ -272,16 +300,110 @@ class API:
         except Exception:
             pass
 
+    # ── Updates ──
+
+    @staticmethod
+    def _version_tuple(value):
+        """Return a comparable version tuple without adding a runtime dependency."""
+        parts = str(value or "").lstrip("vV").split(".")
+        numbers = []
+        for part in parts[:4]:
+            digits = "".join(ch for ch in part if ch.isdigit())
+            numbers.append(int(digits or 0))
+        return tuple(numbers + [0] * (4 - len(numbers)))
+
+    def check_for_update(self):
+        """Return latest GitHub release metadata when a newer version exists."""
+        request = urllib.request.Request(
+            _LATEST_RELEASE_URL,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "FakeGPS"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=6) as response:
+                release = json.load(response)
+            tag = str(release.get("tag_name", ""))
+            version = tag.lstrip("vV")
+            if not tag or self._version_tuple(version) <= self._version_tuple(__version__):
+                return {"available": False, "version": __version__}
+            wanted = "FakeGPS-macOS.dmg" if sys.platform == "darwin" else "FakeGPS-Windows-Setup.exe"
+            asset = next((a for a in release.get("assets", []) if a.get("name") == wanted), None)
+            if not asset:
+                return {"available": False, "version": version, "error": "No compatible update package"}
+            return {
+                "available": True,
+                "version": version,
+                "tag": tag,
+                "asset_name": wanted,
+                "asset_url": asset.get("browser_download_url", ""),
+            }
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            return {"available": False, "version": __version__, "error": str(exc)}
+
+    def update_app(self):
+        """Download and install the selected platform update in the background."""
+        def _worker():
+            info = self.check_for_update()
+            if not info.get("available"):
+                self._js("showToast('No newer version is available', 'info')")
+                return
+            try:
+                with urllib.request.urlopen(info["asset_url"], timeout=30) as response:
+                    suffix = ".dmg" if sys.platform == "darwin" else ".exe"
+                    fd, download_path = tempfile.mkstemp(prefix="fakegps-update-", suffix=suffix)
+                    with os.fdopen(fd, "wb") as output:
+                        while True:
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            output.write(chunk)
+                if sys.platform == "win32":
+                    subprocess.Popen([
+                        download_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+                        "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS",
+                    ], close_fds=True)
+                    self._js("showToast('Update downloaded. FakeGPS will restart shortly.', 'success')")
+                    threading.Timer(1.0, lambda: os._exit(0)).start()
+                elif sys.platform == "darwin":
+                    app_path = Path(sys.executable).resolve().parents[2]
+                    mount_path = tempfile.mkdtemp(prefix="fakegps-update-mount-")
+                    helper = "\n".join([
+                        "#!/bin/sh", "set -eu",
+                        f"while kill -0 {os.getpid()} 2>/dev/null; do sleep 1; done",
+                        f"hdiutil attach -nobrowse -readonly -mountpoint {shlex.quote(mount_path)} {shlex.quote(download_path)} >/dev/null",
+                        f"ditto {shlex.quote(mount_path + '/FakeGPS.app')} {shlex.quote(str(app_path))}",
+                        f"hdiutil detach {shlex.quote(mount_path)} >/dev/null || true",
+                        f"rm -f {shlex.quote(download_path)}",
+                        f"open {shlex.quote(str(app_path))}",
+                        'rm -f "$0"', "",
+                    ])
+                    helper_fd, helper_name = tempfile.mkstemp(prefix="fakegps-update-", suffix=".sh")
+                    os.close(helper_fd)
+                    helper_path = Path(helper_name)
+                    helper_path.write_text(helper, encoding="utf-8")
+                    helper_path.chmod(0o700)
+                    subprocess.Popen(["/bin/sh", str(helper_path)], start_new_session=True)
+                    self._js("showToast('Update downloaded. FakeGPS will restart shortly.', 'success')")
+                    threading.Timer(0.5, lambda: os._exit(0)).start()
+                else:
+                    subprocess.Popen(["xdg-open", download_path])
+            except Exception as exc:
+                _dump_traceback("update_app")
+                message = str(exc).replace("'", "\\'").replace("\n", " ")
+                self._js(f"showToast('Update failed: {message}', 'error')")
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return {"ok": True, "started": True}
+
 
 def main():
     import webview
 
     api = API()
     html_path = _resource_path("ui.html")
-    html_content = html_path.read_text(encoding="utf-8")
+    html_content = html_path.read_text(encoding="utf-8").replace("__VERSION__", __version__)
 
     window = webview.create_window(
-        title="FakeGPS v6.2.2",
+        title=f"FakeGPS v{__version__}",
         html=html_content,
         js_api=api,
         width=1280,
