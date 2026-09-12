@@ -21,6 +21,38 @@ from . import __version__
 
 
 _LATEST_RELEASE_URL = "https://api.github.com/repos/sixzjd/fakeGPS-for-iPhone/releases/latest"
+# The official site is backed by R2 and is far faster than GitHub in mainland China,
+# so it is tried first; the GitHub asset URL remains the canonical fallback.
+_MIRROR_BASE_URL = "https://fakegps.sixzjd.sbs/dl"
+
+
+def _download_first(urls, suffix):
+    """Stream the first reachable URL into a temp file and return its path."""
+    last_error = None
+    for url in urls:
+        fd, path = tempfile.mkstemp(prefix="fakegps-update-", suffix=suffix)
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "FakeGPS"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                expected = int(response.headers.get("Content-Length") or 0)
+                with os.fdopen(fd, "wb") as output:
+                    while True:
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        output.write(chunk)
+            size = os.path.getsize(path)
+            if expected and size != expected:
+                raise OSError(f"incomplete download ({size}/{expected} bytes)")
+            return path
+        except Exception as exc:
+            last_error = exc
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            os.unlink(path)
+    raise last_error or RuntimeError("No download source available")
 
 
 def _resource_path(relative_path):
@@ -313,7 +345,7 @@ class API:
         return tuple(numbers + [0] * (4 - len(numbers)))
 
     def check_for_update(self):
-        """Return latest GitHub release metadata when a newer version exists."""
+        """Return latest release metadata and download URLs when a newer version exists."""
         request = urllib.request.Request(
             _LATEST_RELEASE_URL,
             headers={"Accept": "application/vnd.github+json", "User-Agent": "FakeGPS"},
@@ -334,7 +366,7 @@ class API:
                 "version": version,
                 "tag": tag,
                 "asset_name": wanted,
-                "asset_url": asset.get("browser_download_url", ""),
+                "urls": [u for u in (f"{_MIRROR_BASE_URL}/{wanted}", asset.get("browser_download_url", "")) if u],
             }
         except (OSError, ValueError, urllib.error.URLError) as exc:
             return {"available": False, "version": __version__, "error": str(exc)}
@@ -347,15 +379,8 @@ class API:
                 self._js("showToast('No newer version is available', 'info')")
                 return
             try:
-                with urllib.request.urlopen(info["asset_url"], timeout=30) as response:
-                    suffix = ".dmg" if sys.platform == "darwin" else ".exe"
-                    fd, download_path = tempfile.mkstemp(prefix="fakegps-update-", suffix=suffix)
-                    with os.fdopen(fd, "wb") as output:
-                        while True:
-                            chunk = response.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            output.write(chunk)
+                suffix = ".dmg" if sys.platform == "darwin" else ".exe"
+                download_path = _download_first(info["urls"], suffix)
                 if sys.platform == "win32":
                     subprocess.Popen([
                         download_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
