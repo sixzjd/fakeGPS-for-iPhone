@@ -15,12 +15,12 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'FakeGPS Project'),
         StringStruct('FileDescription', 'FakeGPS iPhone virtual GPS location tool'),
-        StringStruct('FileVersion', '6.2.3.0'),
+        StringStruct('FileVersion', '6.2.4.0'),
         StringStruct('InternalName', 'FakeGPS'),
         StringStruct('LegalCopyright', 'Copyright (c) FakeGPS Project'),
         StringStruct('OriginalFilename', 'FakeGPS.exe'),
         StringStruct('ProductName', 'FakeGPS'),
-        StringStruct('ProductVersion', '6.2.3.0')
+        StringStruct('ProductVersion', '6.2.4.0')
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

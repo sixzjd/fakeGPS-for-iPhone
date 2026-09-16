@@ -1,5 +1,5 @@
 #define AppName "FakeGPS"
-#define AppVersion "6.2.3"
+#define AppVersion "6.2.4"
 #define AppPublisher "sixzjd"
 #define AppExeName "FakeGPS.exe"
 
