@@ -5,14 +5,39 @@ pymobiledevice3 hard-imports these in core modules:
   - pygments (service_connection.py, remotexpc.py): from pygments import formatters, highlight, lexers
   - traitlets (utils.py): from traitlets.config import Config
   - IPython (utils.py): import IPython
-  - prompt_toolkit (cli/ only, but transitive)
   - jedi, parso (transitive via IPython)
 
 Our GUI code path never calls the functions that use these, so we replace
 them with smart stubs that accept any attribute access / call without crashing.
+
+prompt_toolkit is deliberately NOT stubbed: since pymobiledevice3 11.x,
+utils.py hard-imports questionary, and questionary *subclasses* prompt_toolkit
+classes at import time (``class InquirerControl(FormattedTextControl)``).  A
+module stub cannot be used as a base class, so the only workable option is to
+ship the real prompt_toolkit -- it is pure Python and costs ~1.5 MB.  See
+fakegps.spec, which collects it via collect_submodules().
+
+Submodules of the remaining roots resolve through _StubFinder, so the path list
+does not have to be maintained by hand.  Hand-maintaining it is what broke the
+v6.2.3 macOS build: questionary reached ``prompt_toolkit.validation``, that path
+was missing from the list, and because ``pymobiledevice3.lockdown`` pulls in
+utils.py, every device connection and location call raised ModuleNotFoundError
+-- only device *listing* worked.
 """
+import importlib
+import importlib.machinery
 import sys
 import types
+
+
+class _StubLoader:
+    """Materialise any module under a stubbed root as a stub."""
+
+    def create_module(self, spec):
+        return _StubModule(spec.name)
+
+    def exec_module(self, module):
+        pass
 
 
 class _StubModule(types.ModuleType):
@@ -23,12 +48,13 @@ class _StubModule(types.ModuleType):
     - Supports 'from X import Y' because __getattr__ handles missing attrs
     """
 
-    def __init__(self, name, package=None):
+    def __init__(self, name):
         super().__init__(name)
         self.__path__ = []
-        self.__package__ = package or name
-        self.__loader__ = None
-        self.__spec__ = None
+        self.__package__ = name.rpartition('.')[0] or name
+        self.__loader__ = _StubLoader()
+        self.__spec__ = importlib.machinery.ModuleSpec(
+            name, self.__loader__, is_package=True)
 
     def __getattr__(self, name):
         # Don't recurse on dunder attrs used by import machinery
@@ -36,7 +62,7 @@ class _StubModule(types.ModuleType):
             raise AttributeError(name)
         # Return a new stub for any attribute
         child_name = f"{self.__name__}.{name}"
-        stub = _StubModule(child_name, package=self.__name__)
+        stub = _StubModule(child_name)
         # Cache it so repeated access returns the same object
         object.__setattr__(self, name, stub)
         # Also register in sys.modules so 'from X.Y import Z' works
@@ -57,6 +83,20 @@ class _StubModule(types.ModuleType):
         return f"<StubModule '{self.__name__}'>"
 
 
+class _StubFinder:
+    """Resolve any submodule of a stubbed root to a stub.
+
+    Sits at the front of sys.meta_path, so the entire subtree is stubbed
+    without a hand-maintained path list.
+    """
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] not in STUB_ROOTS:
+            return None
+        return importlib.machinery.ModuleSpec(
+            fullname, _StubLoader(), is_package=True)
+
+
 def _stub_highlight(*args, **kwargs):
     """Stub for pygments.highlight() — returns input text unchanged."""
     if args:
@@ -70,63 +110,15 @@ STUB_ROOTS = [
     'IPython',
     'jedi',
     'parso',
-    'prompt_toolkit',
     'pygments',
     'traitlets',
 ]
 
-# Pre-register known deep submodule paths so 'from X.Y.Z import W' works
-DEEP_PATHS = [
-    # pygments (used by service_connection.py, remotexpc.py)
-    'pygments.formatters',
-    'pygments.lexers',
-    'pygments.styles',
-    'pygments.token',
-    # traitlets (used by utils.py)
-    'traitlets.config',
-    'traitlets.config.loader',
-    # IPython (used by utils.py)
-    'IPython.core',
-    'IPython.core.getipython',
-    'IPython.core.application',
-    'IPython.core.crashhandler',
-    'IPython.core.ultratb',
-    'IPython.core.interactiveshell',
-    'IPython.terminal',
-    'IPython.terminal.embed',
-    'IPython.terminal.interactiveshell',
-    # jedi
-    'jedi.api',
-    # prompt_toolkit (CLI only, but might be transitively imported)
-    'prompt_toolkit.application',
-    'prompt_toolkit.auto_suggest',
-    'prompt_toolkit.completion',
-    'prompt_toolkit.completion.base',
-    'prompt_toolkit.document',
-    'prompt_toolkit.history',
-    'prompt_toolkit.styles',
-]
+sys.meta_path.insert(0, _StubFinder())
 
-# Register all stubs
-for name in STUB_ROOTS + DEEP_PATHS:
+for name in STUB_ROOTS:
     if name not in sys.modules:
         sys.modules[name] = _StubModule(name)
-
-# Link parent → child attributes
-# e.g. sys.modules['pygments'].formatters should be sys.modules['pygments.formatters']
-for name in DEEP_PATHS:
-    parts = name.split('.')
-    for i in range(1, len(parts)):
-        parent_name = '.'.join(parts[:i])
-        child_name = '.'.join(parts[:i + 1])
-        child_attr = parts[i]
-        parent = sys.modules.get(parent_name)
-        child = sys.modules.get(child_name)
-        if parent and child:
-            try:
-                object.__setattr__(parent, child_attr, child)
-            except (AttributeError, TypeError):
-                pass
 
 # ── Specific functional stubs ──
 
@@ -135,7 +127,7 @@ pygments_mod = sys.modules['pygments']
 object.__setattr__(pygments_mod, 'highlight', _stub_highlight)
 
 # traitlets.config.Config is instantiated
-traitlets_config = sys.modules['traitlets.config']
+traitlets_config = importlib.import_module('traitlets.config')
 
 
 class _StubConfig:

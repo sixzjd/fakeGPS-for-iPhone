@@ -37,11 +37,20 @@ try:
 except ImportError:
     pass
 
+# prompt_toolkit and questionary are hard requirements of pymobiledevice3 >= 11:
+# utils.py imports questionary at module level, and questionary subclasses
+# prompt_toolkit classes at import time.  A module stub cannot serve as a base
+# class, so both must ship for real.  They are pure Python, and both import
+# submodules dynamically, so collect the whole package rather than guessing.
+PROMPT_TOOLKIT_HIDDENIMPORTS = (
+    collect_submodules('prompt_toolkit') + collect_submodules('questionary')
+)
+
 # ── Modules to exclude (saves space by removing transitive deps) ──
 EXCLUDED_MODULES = [
     # IPython & friends
     'IPython', 'ipython', 'ipykernel', 'ipywidgets',
-    'jedi', 'parso', 'prompt_toolkit', 'pygments',
+    'jedi', 'parso', 'pygments',
     'traitlets', 'nbformat', 'nbclient', 'notebook',
     # Image processing (not used)
     'PIL', 'Pillow', 'pillow',
@@ -84,7 +93,7 @@ a = Analysis(
         'webview.platforms.edgechromium',
         'webview.platforms.winforms',
         'webview.util',
-    ] + PYTHONNET_HIDDENIMPORTS,
+    ] + PYTHONNET_HIDDENIMPORTS + PROMPT_TOOLKIT_HIDDENIMPORTS,
     binaries=PYTHONNET_BINARIES,
     hookspath=[],
     hooksconfig={},

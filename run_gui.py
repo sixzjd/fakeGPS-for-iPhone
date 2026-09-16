@@ -46,6 +46,35 @@ if len(sys.argv) > 1 and sys.argv[1] == "--tunneld":
     run_tunneld_forever()
     raise SystemExit(0)
 
+if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+    # Import-only smoke test for the device path.  Launching the GUI does not
+    # import pymobiledevice3 at all, so a missing transitive dependency stays
+    # invisible until a user plugs in an iPhone -- which is exactly how v6.2.3
+    # shipped with prompt_toolkit excluded and every connect/location call
+    # failing.  CI runs this on the frozen bundle and fails the build on error.
+    import importlib
+
+    _SELFTEST_MODULES = (
+        "pymobiledevice3.usbmux",
+        "pymobiledevice3.lockdown",
+        "pymobiledevice3.services.simulate_location",
+        "pymobiledevice3.services.dvt.instruments.dvt_provider",
+        "pymobiledevice3.services.dvt.instruments.location_simulation",
+        "pymobiledevice3.tunneld.api",
+        "pymobiledevice3.tunneld.server",
+        "pymobiledevice3.remote.common",
+    )
+    _failed = []
+    for _name in _SELFTEST_MODULES:
+        try:
+            importlib.import_module(_name)
+        except Exception as _exc:
+            _failed.append(f"{_name}: {type(_exc).__name__}: {_exc}")
+    for _line in _failed:
+        print(f"FAIL {_line}")
+    print(f"selftest: {len(_SELFTEST_MODULES) - len(_failed)}/{len(_SELFTEST_MODULES)} modules imported")
+    raise SystemExit(1 if _failed else 0)
+
 from fakegps.gui import main
 
 main()

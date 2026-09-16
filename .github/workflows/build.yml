@@ -26,6 +26,8 @@ jobs:
           pip install -r requirements.txt pyinstaller
       - name: Build macOS app
         run: pyinstaller fakegps.spec --clean -y
+      - name: Smoke-test device import path (macOS)
+        run: dist/FakeGPS.app/Contents/MacOS/FakeGPS --selftest
       - name: Create macOS DMG
         run: |
           mkdir -p dist/dmg-root
@@ -81,6 +83,8 @@ jobs:
           python check_pythonnet_runtime.py
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
+      - name: Smoke-test device import path (Windows)
+        run: dist\FakeGPS\FakeGPS.exe --selftest
       - name: Harden Windows PE files
         run: python patch_pe_security.py dist\FakeGPS
       - name: Test packaged Windows startup
