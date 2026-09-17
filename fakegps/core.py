@@ -401,7 +401,18 @@ def run_tunneld_forever():
     from pymobiledevice3.remote.common import TunnelProtocol
     from pymobiledevice3.tunneld.server import TunneldRunner
 
-    TunneldRunner.create(TUNNELD_HOST, TUNNELD_PORT, protocol=TunnelProtocol.DEFAULT)
+    # Pin TCP explicitly.  Do NOT use TunnelProtocol.DEFAULT here: upstream
+    # defines it as
+    #     DEFAULT = TCP if sys.version_info >= (3, 13) else QUIC
+    # and the frozen bundle ships Python 3.12, so DEFAULT resolves to QUIC.
+    # Apple removed QUIC tunnel support in iOS 18.2+, which makes every
+    # WiFi/remoted tunnel attempt fail with QuicProtocolNotSupportedError.
+    # Only the WiFi path consumes this value -- the USB paths (usbmux,
+    # CDC-NCM, mobdev2) already hard-code TCP -- so pinning TCP aligns WiFi
+    # with the transport USB has always used.  The PSK support the TCP
+    # tunnel needs on Python < 3.13 comes from sslpsk-pmd3, which upstream
+    # declares as a dependency exactly for that version range.
+    TunneldRunner.create(TUNNELD_HOST, TUNNELD_PORT, protocol=TunnelProtocol.TCP)
 
 
 async def set_location(latitude, longitude, serial=None):
