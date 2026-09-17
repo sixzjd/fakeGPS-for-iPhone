@@ -1,4 +1,7 @@
-pymobiledevice3>=7.0
+# Pinned: 11.14.0 silently changes what gets bundled (~1 MB smaller on macOS),
+# so an unpinned range turns every rebuild into an untested device-layer change.
+# Bump deliberately, and re-run the --selftest CI guard plus a real-device check.
+pymobiledevice3==11.12.5
 
 # For GUI mode
 pywebview==5.4
