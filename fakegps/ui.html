@@ -1235,7 +1235,14 @@ input[readonly] {
   transform: translateY(-1px);
 }
 .place-btn:active { transform: translateY(0); }
-.place-btn .emoji { font-size: 14px; }
+.place-btn .place-ico {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+.place-btn .place-ico svg { width: 100%; height: 100%; display: block; }
+.place-btn:hover .place-ico { opacity: 1; }
 
 /* ── GPX Section ── */
 .gpx-row {
@@ -2033,17 +2040,21 @@ function showToast(msg, type) {
 }
 
 // ── Quick Places ──
+// Each entry carries `ic`: the inner markup of a monochrome 24x24 stroke icon
+// (rendered inside a <svg fill="none" stroke="currentColor"> wrapper below).
+// Deliberately emoji-free: emoji render as colour glyphs that ignore the theme
+// and differ per platform.
 var BUILTIN_PLACES = [
-  {emoji: '🏛', label: '天安门', lat: 39.9073, lng: 116.391215},
-  {emoji: '🏙', label: '国贸CBD', lat: 39.90775, lng: 116.455672},
-  {emoji: '🏟', label: '鸟巢', lat: 39.991497, lng: 116.390159},
-  {emoji: '🌇', label: '上海外滩', lat: 31.240807, lng: 121.485998},
-  {emoji: '🌃', label: '广州塔', lat: 23.109, lng: 113.319111},
-  {emoji: '🇫🇷', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
-  {emoji: '🇺🇸', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
-  {emoji: '🗼', label: '东京塔', lat: 35.6586, lng: 139.7454},
-  {emoji: '🇬🇧', label: '伦敦大本钟', lat: 51.5007, lng: -0.1246},
-  {emoji: '🏺', label: '罗马斗兽场', lat: 41.8902, lng: 12.4922}
+  {ic: '<path d="M3 21h18"/><path d="M2.5 10.5h19"/><path d="M12 5 3 10.5M12 5l9 5.5"/><path d="M6 10.5V21M18 10.5V21"/><path d="M10 21v-4.5h4V21"/>', label: '天安门', lat: 39.9073, lng: 116.391215},
+  {ic: '<path d="M3 21h18"/><path d="M4 21V10h6v11"/><path d="M10 21V5h6v16"/><path d="M16 21V13h4v8"/>', label: '国贸CBD', lat: 39.90775, lng: 116.455672},
+  {ic: '<ellipse cx="12" cy="13" rx="9" ry="5"/><path d="M6.6 9.3 10 16.6M12 8v10M17.4 9.3 14 16.6"/>', label: '鸟巢', lat: 39.991497, lng: 116.390159},
+  {ic: '<path d="M4 13V8h3v5"/><path d="M10 13V5h3v8"/><path d="M16 13V9h3v4"/><path d="M2.5 13h19"/><path d="M3 18q2.25-2.2 4.5 0t4.5 0 4.5 0 4.5 0"/>', label: '上海外滩', lat: 31.240807, lng: 121.485998},
+  {ic: '<path d="M7 21c0-4.2 1.6-6.8 3.5-9.2"/><path d="M17 21c0-4.2-1.6-6.8-3.5-9.2"/><path d="M7 21h10"/><path d="M9.4 11.8h5.2"/><path d="M12 11.8V3"/>', label: '广州塔', lat: 23.109, lng: 113.319111},
+  {ic: '<path d="M12 2.5 6 21M12 2.5l6 18.5"/><path d="M5 21h14"/><path d="M9.7 8h4.6"/><path d="M8.3 13h7.4"/><path d="M8.3 13c0 2.8 1.6 4.8 3.7 4.8s3.7-2 3.7-4.8"/>', label: '巴黎埃菲尔铁塔', lat: 48.8584, lng: 2.2945},
+  {ic: '<path d="M3 21h18"/><path d="M4 21V4h9v17"/><path d="M13 21V12h7v9"/><rect x="6" y="6.5" width="5" height="4" rx="0.5"/><path d="M15 15h3M15 18h3"/>', label: '纽约时代广场', lat: 40.7580, lng: -73.9855},
+  {ic: '<path d="M12 2v3"/><path d="M8.5 6.5h7"/><path d="M12 6.5 8 21M12 6.5l4 14.5"/><path d="M6 21h12"/><path d="M10.3 13h3.4"/>', label: '东京塔', lat: 35.6586, lng: 139.7454},
+  {ic: '<path d="M6 21h12"/><path d="M8.5 21V6h7v15"/><path d="M8.5 6 12 3l3.5 3"/><circle cx="12" cy="11.5" r="2.4"/>', label: '伦敦大本钟', lat: 51.5007, lng: -0.1246},
+  {ic: '<path d="M3.5 20V10.5c0-3 3.8-5.5 8.5-5.5s8.5 2.5 8.5 5.5V20"/><path d="M3.5 20h17"/><path d="M3.5 14h17"/><path d="M7.5 20v-6M12 20v-6M16.5 20v-6"/>', label: '罗马斗兽场', lat: 41.8902, lng: 12.4922}
 ];
 
 (function() {
@@ -2051,7 +2062,7 @@ var BUILTIN_PLACES = [
   BUILTIN_PLACES.forEach(function(p) {
     var btn = document.createElement('button');
     btn.className = 'place-btn';
-    btn.innerHTML = '<span class="emoji">' + p.emoji + '</span>' + p.label;
+    btn.innerHTML = '<span class="place-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p.ic + '</svg></span>' + p.label;
     btn.onclick = function() {
       // Places store WGS-84 coords for GPS spoofing
       selectedLat = p.lat; selectedLng = p.lng;
