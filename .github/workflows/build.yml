@@ -84,7 +84,27 @@ jobs:
       - name: Build Windows exe
         run: pyinstaller fakegps.spec --clean -y
       - name: Smoke-test device import path (Windows)
-        run: dist\FakeGPS\FakeGPS.exe --selftest
+        shell: pwsh
+        run: |
+          # FakeGPS.exe is built with console=False, i.e. as a GUI-subsystem
+          # binary.  PowerShell does not wait for those and never populates
+          # $LASTEXITCODE from them, so the plain `FakeGPS.exe --selftest` form
+          # let a failing selftest pass the job silently -- observed
+          # 2026-09-17, when the step printed "FAIL ..." plus
+          # "selftest: 11/12 checks passed" and the job still went green.
+          # Start-Process -Wait -PassThru is the only way to get the real code.
+          $exe = 'dist\FakeGPS\FakeGPS.exe'
+          $out = Join-Path $env:RUNNER_TEMP 'fakegps-selftest.out'
+          $err = Join-Path $env:RUNNER_TEMP 'fakegps-selftest.err'
+          $proc = Start-Process -FilePath $exe -ArgumentList '--selftest' `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          if (Test-Path $out) { Get-Content $out }
+          if (Test-Path $err) { Get-Content $err }
+          Write-Host "selftest exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            throw "FakeGPS --selftest failed with exit code $($proc.ExitCode)"
+          }
       - name: Harden Windows PE files
         run: python patch_pe_security.py dist\FakeGPS
       - name: Test packaged Windows startup
