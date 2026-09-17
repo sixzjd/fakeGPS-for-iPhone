@@ -93,6 +93,18 @@ jobs:
           # 2026-09-17, when the step printed "FAIL ..." plus
           # "selftest: 11/12 checks passed" and the job still went green.
           # Start-Process -Wait -PassThru is the only way to get the real code.
+
+          # Guard self-check: a guard that cannot go red is worse than none, and
+          # "ExitCode == 0" on a passing build is also what a permanently-zero
+          # harness would report.  Prove the harness surfaces a non-zero code
+          # before trusting the verdict below.
+          $probe = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'exit 3' `
+            -Wait -PassThru -NoNewWindow
+          if ($probe.ExitCode -ne 3) {
+            throw "guard self-check failed: Start-Process reported exit code $($probe.ExitCode), expected 3"
+          }
+          Write-Host "guard self-check: Start-Process surfaced exit code 3 as expected"
+
           $exe = 'dist\FakeGPS\FakeGPS.exe'
           $out = Join-Path $env:RUNNER_TEMP 'fakegps-selftest.out'
           $err = Join-Path $env:RUNNER_TEMP 'fakegps-selftest.err'
